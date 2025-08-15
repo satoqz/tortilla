@@ -1,16 +1,19 @@
-mod lex;
+mod formatter;
+mod lexer;
+mod parser;
 
 use std::io::{self, Read};
-
-// const DEFAULT_LINE_WIDTH: usize = 80;
-// const DEFAULT_TAB_WIDTH: usize = 4;
 
 fn main() -> io::Result<()> {
     let mut input = String::new();
     io::stdin().read_to_string(&mut input)?;
 
-    let tokens = lex::lex(&input);
-    eprintln!("{tokens:?}");
+    let tokens = lexer::lex(&input);
 
-    Ok(())
+    // TODO: Handle errors once it makes sense.
+    let paragraphs = parser::parse(&tokens).unwrap();
+
+    let stdout = io::stdout().lock();
+    let options = formatter::Options::default();
+    formatter::format(stdout, &paragraphs, options)
 }

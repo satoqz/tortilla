@@ -2,10 +2,15 @@ use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Debug, PartialEq)]
 pub enum Token<'a> {
-    Tab,
+    /// ' '
     Space,
+    /// '\t'
+    Tab,
+    /// '\n'
     NewlineLF,
+    /// '\r\n'
     NewlineCRLF,
+    /// A chain of characters without any whitespace.
     Word(&'a str),
 }
 
