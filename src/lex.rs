@@ -1,3 +1,5 @@
+use unicode_segmentation::UnicodeSegmentation;
+
 #[derive(Debug, PartialEq)]
 pub enum Token<'a> {
     Tab,
@@ -7,77 +9,51 @@ pub enum Token<'a> {
     Word(&'a str),
 }
 
-impl Token<'_> {
-    fn len(&self) -> usize {
-        match self {
-            Self::Tab | Self::Space | Self::NewlineLF => 1,
-            Self::NewlineCRLF => 2,
-            Self::Word(s) => s.len(),
-        }
-    }
+fn word_break(grapheme: &str) -> Option<Token<'static>> {
+    Some(match grapheme {
+        " " => Token::Space,
+        "\t" => Token::Tab,
+        "\n" => Token::NewlineLF,
+        "\r\n" => Token::NewlineCRLF,
+        _ => return None,
+    })
 }
 
 pub fn lex(input: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
 
-    if input.is_empty() {
-        return tokens;
+    enum State {
+        Clean,
+        Word(usize),
     }
 
-    let mut pos = 0;
-    let lexers = [lex_space_or_tab, lex_newline, lex_word];
+    let mut state = State::Clean;
 
-    while pos < input.len() {
-        let slice = &input[pos..];
-        match lexers.iter().find_map(|lexer| lexer(slice)) {
-            Some(token) => {
-                pos += token.len();
-                tokens.push(token);
+    for (byte_idx, grapheme) in input.grapheme_indices(true) {
+        match state {
+            State::Clean => {
+                if let Some(token) = word_break(grapheme) {
+                    tokens.push(token);
+                } else {
+                    state = State::Word(byte_idx);
+                }
             }
-            None => unreachable!("no lexer matched input"),
+
+            State::Word(start_idx) => {
+                if let Some(token) = word_break(grapheme) {
+                    tokens.push(Token::Word(&input[start_idx..byte_idx]));
+                    tokens.push(token);
+                    state = State::Clean;
+                }
+            }
         }
+    }
+
+    if let State::Word(start_idx) = state {
+        tokens.push(Token::Word(&input[start_idx..]));
     }
 
     tokens
-}
-
-fn lex_space_or_tab(input: &str) -> Option<Token> {
-    match input.bytes().next() {
-        Some(b' ') => Some(Token::Space),
-        Some(b'\t') => Some(Token::Tab),
-        _ => None,
-    }
-}
-
-fn lex_newline(input: &str) -> Option<Token> {
-    let mut iter = input.bytes();
-    match iter.next() {
-        Some(b'\n') => Some(Token::NewlineLF),
-        Some(b'\r') => match iter.next() {
-            Some(b'\n') => Some(Token::NewlineCRLF),
-            _ => None, // Lone \r is not a newline.
-        },
-        _ => None,
-    }
-}
-
-fn lex_word(input: &str) -> Option<Token> {
-    let mut iter = input.bytes().enumerate().peekable();
-
-    while let Some((idx, byte)) = iter.next() {
-        // Consume until next word break:
-        if matches!(byte, b' ' | b'\t' | b'\n') {
-            return Some(Token::Word(&input[..idx]));
-        }
-
-        // CRLF is slightly more complex:
-        if byte == b'\r' && matches!(iter.peek(), Some((_, b'\n'))) {
-            return Some(Token::Word(&input[..idx]));
-        }
-    }
-
-    // The word goes until end of input.
-    Some(Token::Word(input))
 }
 
 #[cfg(test)]
@@ -185,6 +161,94 @@ mod tests {
         assert_eq!(
             lex("\n\r\n\n"),
             vec![Token::NewlineLF, Token::NewlineCRLF, Token::NewlineLF,]
+        );
+    }
+
+    #[test]
+    fn test_lone_cr_in_word() {
+        assert_eq!(lex("a\rb"), vec![Token::Word("a\rb")]);
+    }
+
+    #[test]
+    fn test_cr_not_followed_by_lf() {
+        assert_eq!(lex("a\r"), vec![Token::Word("a\r")]);
+    }
+
+    #[test]
+    fn test_crlf_as_newline() {
+        assert_eq!(
+            lex("a\r\nb"),
+            vec![Token::Word("a"), Token::NewlineCRLF, Token::Word("b")]
+        );
+    }
+
+    #[test]
+    fn test_emoji() {
+        assert_eq!(lex("hello🇩🇪world"), vec![Token::Word("hello🇩🇪world")]);
+    }
+
+    #[test]
+    fn test_combining_mark() {
+        assert_eq!(lex("café"), vec![Token::Word("café")]);
+    }
+
+    #[test]
+    fn test_multibyte_chars() {
+        assert_eq!(
+            lex("汉字 test"),
+            vec![Token::Word("汉字"), Token::Space, Token::Word("test")]
+        );
+    }
+
+    #[test]
+    fn test_emoji_with_spaces() {
+        assert_eq!(
+            lex("hello 🇩🇪 world"),
+            vec![
+                Token::Word("hello"),
+                Token::Space,
+                Token::Word("🇩🇪"),
+                Token::Space,
+                Token::Word("world"),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_complex_grapheme_clusters() {
+        assert_eq!(
+            lex("Zöe\tétoile\n\r\n👨‍👩‍👧‍👦"),
+            vec![
+                Token::Word("Zöe"),
+                Token::Tab,
+                Token::Word("étoile"),
+                Token::NewlineLF,
+                Token::NewlineCRLF,
+                Token::Word("👨‍👩‍👧‍👦"),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_nbsp_as_part_of_word() {
+        assert_eq!(
+            lex("hello\u{A0}world"),
+            vec![Token::Word("hello\u{A0}world")]
+        );
+    }
+
+    #[test]
+    fn test_mixed_unicode_and_ascii() {
+        assert_eq!(
+            lex("hello\u{A0}🌍\tworld\n\r\nnext\u{2009}line"),
+            vec![
+                Token::Word("hello\u{A0}🌍"),
+                Token::Tab,
+                Token::Word("world"),
+                Token::NewlineLF,
+                Token::NewlineCRLF,
+                Token::Word("next\u{2009}line"),
+            ]
         );
     }
 }
