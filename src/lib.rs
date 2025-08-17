@@ -109,7 +109,7 @@ where
 }
 
 /// End-to-end wrapping of a string.
-pub fn wrap(input: &str, options: &Options) -> String {
+pub fn wrap(input: &str, options: Options) -> String {
     let newline = options
         .newline
         .unwrap_or(Newline::first_in(input).unwrap_or_default());
@@ -125,6 +125,6 @@ mod tests {
 
     #[test]
     fn todo() {
-        assert_eq!(&wrap("foo bar", &Options::default()), "foo bar")
+        assert_eq!(&wrap("foo bar", Options::default()), "foo bar")
     }
 }

@@ -2,16 +2,18 @@ use unicode_width::UnicodeWidthStr;
 
 use super::{Options, Token};
 
-pub struct Transformer<'a, 'b, I> {
+const COMMENT_TOKENS: &[&str] = &["#", "//", "///", "//!", "--", ";", ";;"];
+
+pub struct Transformer<'a, I> {
     source: I,
-    options: &'b Options,
+    options: Options,
 
     line_width: usize,
     newline_count: usize,
     pending_token: Option<Token<'a>>,
 }
 
-pub fn transform<'a, 'b, I>(source: I, options: &'b Options) -> Transformer<'a, 'b, I>
+pub fn transform<'a, I>(source: I, options: Options) -> Transformer<'a, I>
 where
     I: Iterator<Item = Token<'a>>,
 {
@@ -24,7 +26,7 @@ where
     }
 }
 
-impl<'a, 'b, I> Iterator for Transformer<'a, 'b, I>
+impl<'a, I> Iterator for Transformer<'a, I>
 where
     I: Iterator<Item = Token<'a>>,
 {
@@ -97,7 +99,7 @@ mod tests {
     use super::Token::{self, *};
 
     fn transform(input: Vec<Token>) -> Vec<Token> {
-        super::transform(input.into_iter(), &Options::default()).collect()
+        super::transform(input.into_iter(), Options::default()).collect()
     }
 
     #[test]

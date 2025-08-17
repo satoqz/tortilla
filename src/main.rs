@@ -14,7 +14,7 @@ fn main() -> io::Result<()> {
 
     let mut stdout = io::stdout().lock();
 
-    write_all(&mut stdout, transform(lex(&input), &options), newline)?;
+    write_all(&mut stdout, transform(lex(&input), options), newline)?;
     stdout.flush()
 }
 
