@@ -1,13 +1,77 @@
 use std::io::{self, Read};
+
 use wraplines::*;
 
 fn main() -> io::Result<()> {
+    let options = args();
+
     let mut input = String::new();
     io::stdin().read_to_string(&mut input)?;
 
     write(
         io::stdout().lock(),
-        transform(lex(&input), &Options::default()),
-        Newline::LF,
+        transform(lex(&input), &options),
+        options.newline.unwrap_or_default(),
     )
+}
+
+const HELP: &str =
+    "Usage: wraplines [-h, --help] [--width <WIDTH>] [--tabs <TABS>] [--lf] [--crlf]";
+
+fn args() -> Options {
+    let mut options = Options::default();
+
+    enum State {
+        Clean,
+        Width,
+        Tabs,
+    }
+
+    let mut state = State::Clean;
+
+    for arg in std::env::args().skip(1) {
+        match state {
+            State::Clean => match arg.as_str() {
+                "-h" | "--help" => {
+                    eprintln!("{HELP}");
+                    std::process::exit(0);
+                }
+
+                "--width" => state = State::Width,
+                "--tabs" => state = State::Tabs,
+
+                "--lf" => options.newline = Some(Newline::LF),
+                "--crlf" => options.newline = Some(Newline::CRLF),
+
+                other => {
+                    eprintln!("Unexpected argument '{other}'");
+                    std::process::exit(1);
+                }
+            },
+
+            State::Width => {
+                state = State::Clean;
+                options.line_width = arg.parse().unwrap_or_else(|err| {
+                    eprintln!("Bad argument '{arg}' for option '--width': {err}");
+                    std::process::exit(1);
+                })
+            }
+
+            State::Tabs => {
+                state = State::Clean;
+                options.tab_width = arg.parse().unwrap_or_else(|err| {
+                    eprintln!("Bad argument '{arg}' for option '--tabs': {err}");
+                    std::process::exit(1);
+                })
+            }
+        }
+    }
+
+    match state {
+        State::Clean => return options,
+        State::Width => eprintln!("Missing argument for option '--width'"),
+        State::Tabs => eprintln!("Missing argument for option '--tabs'"),
+    }
+
+    std::process::exit(1);
 }

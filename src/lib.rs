@@ -13,7 +13,7 @@ pub struct Options {
     pub line_width: usize,
     /// How much a tab indent contributes to line width.
     pub tab_width: usize,
-    pub newline: Newline,
+    pub newline: Option<Newline>,
 }
 
 impl Default for Options {
@@ -21,7 +21,7 @@ impl Default for Options {
         Self {
             line_width: 80,
             tab_width: 4,
-            newline: Newline::default(),
+            newline: None,
         }
     }
 }
@@ -101,7 +101,11 @@ where
 /// End-to-end wrapping of a string.
 pub fn wrap(input: &str, options: &Options) -> String {
     transform(lex(&input), options)
-        .map(|token| token.as_str(options.newline).to_string())
+        .map(|token| {
+            token
+                .as_str(options.newline.unwrap_or_default())
+                .to_string()
+        })
         .collect()
 }
 
