@@ -7,6 +7,7 @@ fn main() -> io::Result<()> {
 
     write(
         io::stdout().lock(),
-        transform(lex(&input), Options::default()),
+        transform(lex(&input), &Options::default()),
+        Newline::LF,
     )
 }
