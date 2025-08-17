@@ -1,4 +1,4 @@
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 
 use wraplines::*;
 
@@ -12,11 +12,10 @@ fn main() -> io::Result<()> {
         .newline
         .unwrap_or(Newline::first_in(&input).unwrap_or_default());
 
-    write(
-        io::stdout().lock(),
-        transform(lex(&input), &options),
-        newline,
-    )
+    let mut stdout = io::stdout().lock();
+
+    write_all(&mut stdout, transform(lex(&input), &options), newline)?;
+    stdout.flush()
 }
 
 const HELP: &str =

@@ -85,12 +85,12 @@ impl Token<'_> {
 }
 
 /// Convenience function to write a token stream out to a [std::io::Write].
-pub fn write<'a, I>(mut output: impl io::Write, tokens: I, newline: Newline) -> io::Result<()>
+pub fn write_all<'a, I>(mut output: impl io::Write, tokens: I, newline: Newline) -> io::Result<()>
 where
     I: Iterator<Item = Token<'a>>,
 {
     for token in tokens {
-        output.write(token.as_bytes(newline))?;
+        output.write_all(token.as_bytes(newline))?;
     }
 
     Ok(())
