@@ -7,6 +7,8 @@ pub use transform::*;
 use std::fmt;
 use std::io;
 
+use unicode_segmentation::UnicodeSegmentation;
+
 #[derive(Debug, Clone)]
 pub struct Options {
     /// Maximum line width to wrap at.
@@ -44,6 +46,14 @@ impl Newline {
             Self::LF => "\n",
             Self::CRLF => "\r\n",
         }
+    }
+
+    pub fn first_in(input: &str) -> Option<Newline> {
+        input.graphemes(true).find_map(|grapheme| match grapheme {
+            "\n" => Some(Newline::LF),
+            "\r\n" => Some(Newline::CRLF),
+            _ => None,
+        })
     }
 }
 
@@ -100,12 +110,12 @@ where
 
 /// End-to-end wrapping of a string.
 pub fn wrap(input: &str, options: &Options) -> String {
+    let newline = options
+        .newline
+        .unwrap_or(Newline::first_in(input).unwrap_or_default());
+
     transform(lex(&input), options)
-        .map(|token| {
-            token
-                .as_str(options.newline.unwrap_or_default())
-                .to_string()
-        })
+        .map(|token| token.as_str(newline).to_string())
         .collect()
 }
 

@@ -8,10 +8,14 @@ fn main() -> io::Result<()> {
     let mut input = String::new();
     io::stdin().read_to_string(&mut input)?;
 
+    let newline = options
+        .newline
+        .unwrap_or(Newline::first_in(&input).unwrap_or_default());
+
     write(
         io::stdout().lock(),
         transform(lex(&input), &options),
-        options.newline.unwrap_or_default(),
+        newline,
     )
 }
 
