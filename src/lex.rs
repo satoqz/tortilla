@@ -1,17 +1,29 @@
-use unicode_segmentation::UnicodeSegmentation;
+use unicode_segmentation::{GraphemeIndices, UnicodeSegmentation};
 
-#[derive(Debug, PartialEq)]
-pub enum Token<'a> {
-    /// ' '
-    Space,
-    /// '\t'
-    Tab,
-    /// '\n'
-    NewlineLF,
-    /// '\r\n'
-    NewlineCRLF,
-    /// A chain of characters without any whitespace.
-    Word(&'a str),
+use super::Token;
+
+enum State {
+    Clean,
+    Word(usize),
+}
+
+pub struct Lexer<'a> {
+    input: &'a str,
+    inner: GraphemeIndices<'a>,
+
+    state: State,
+
+    /// A pending word break token that hasn't returned yet.
+    pending: Option<Token<'static>>,
+}
+
+pub fn lex(input: &str) -> Lexer<'_> {
+    Lexer {
+        input,
+        state: State::Clean,
+        inner: input.grapheme_indices(true),
+        pending: None,
+    }
 }
 
 fn word_break(grapheme: &str) -> Option<Token<'static>> {
@@ -24,46 +36,50 @@ fn word_break(grapheme: &str) -> Option<Token<'static>> {
     })
 }
 
-pub fn lex(input: &str) -> Vec<Token> {
-    let mut tokens = Vec::new();
+impl<'a> Iterator for Lexer<'a> {
+    type Item = Token<'a>;
 
-    enum State {
-        Clean,
-        Word(usize),
-    }
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(token) = self.pending.take() {
+            return Some(token);
+        }
 
-    let mut state = State::Clean;
-
-    for (byte_idx, grapheme) in input.grapheme_indices(true) {
-        match state {
-            State::Clean => {
-                if let Some(token) = word_break(grapheme) {
-                    tokens.push(token);
-                } else {
-                    state = State::Word(byte_idx);
+        while let Some((byte_idx, grapheme)) = self.inner.next() {
+            match self.state {
+                State::Clean => {
+                    if let Some(token) = word_break(grapheme) {
+                        return Some(token);
+                    } else {
+                        self.state = State::Word(byte_idx);
+                    }
                 }
-            }
 
-            State::Word(start_idx) => {
-                if let Some(token) = word_break(grapheme) {
-                    tokens.push(Token::Word(&input[start_idx..byte_idx]));
-                    tokens.push(token);
-                    state = State::Clean;
+                State::Word(start_idx) => {
+                    if let Some(token) = word_break(grapheme) {
+                        self.state = State::Clean;
+                        self.pending = Some(token);
+                        return Some(Token::Word(&self.input[start_idx..byte_idx]));
+                    }
                 }
             }
         }
-    }
 
-    if let State::Word(start_idx) = state {
-        tokens.push(Token::Word(&input[start_idx..]));
-    }
+        if let State::Word(start_idx) = self.state {
+            self.state = State::Clean;
+            return Some(Token::Word(&self.input[start_idx..]));
+        }
 
-    tokens
+        None
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::Token;
+
+    fn lex(input: &str) -> Vec<Token<'_>> {
+        super::lex(input).collect()
+    }
 
     #[test]
     fn test_empty_input() {
@@ -127,7 +143,7 @@ mod tests {
     fn test_multiple_newlines() {
         assert_eq!(
             lex("\n\n\r\n"),
-            vec![Token::NewlineLF, Token::NewlineLF, Token::NewlineCRLF,]
+            vec![Token::NewlineLF, Token::NewlineLF, Token::NewlineCRLF]
         );
     }
 
