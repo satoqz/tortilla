@@ -2,8 +2,6 @@ use unicode_width::UnicodeWidthStr;
 
 use super::{Options, Token};
 
-const COMMENT_TOKENS: &[&str] = &["#", "//", "///", "//!", "--", ";", ";;"];
-
 pub struct Transformer<'t, I> {
     source: I,
     options: Options,
