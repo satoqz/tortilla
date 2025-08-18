@@ -1,13 +1,13 @@
 use unicode_segmentation::{GraphemeIndices, UnicodeSegmentation};
 
-use super::Token;
+use super::{Newline, Token};
 
 enum State {
     Clean,
     Word(usize),
 }
 
-pub struct Lexer<'t> {
+pub(super) struct Lex<'t> {
     input: &'t str,
     inner: GraphemeIndices<'t>,
 
@@ -17,8 +17,8 @@ pub struct Lexer<'t> {
     pending: Option<Token<'static>>,
 }
 
-pub fn lex(input: &str) -> Lexer<'_> {
-    Lexer {
+pub(super) fn iter(input: &str) -> Lex<'_> {
+    Lex {
         input,
         state: State::Clean,
         inner: input.grapheme_indices(true),
@@ -30,12 +30,13 @@ fn word_break(grapheme: &str) -> Option<Token<'static>> {
     Some(match grapheme {
         " " => Token::Space,
         "\t" => Token::Tab,
-        "\n" | "\r\n" => Token::Newline,
+        "\n" => Token::Newline(Newline::LF),
+        "\r\n" => Token::Newline(Newline::CRLF),
         _ => return None,
     })
 }
 
-impl<'t> Iterator for Lexer<'t> {
+impl<'t> Iterator for Lex<'t> {
     type Item = Token<'t>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -43,7 +44,7 @@ impl<'t> Iterator for Lexer<'t> {
             return Some(token);
         }
 
-        while let Some((byte_idx, grapheme)) = self.inner.next() {
+        for (byte_idx, grapheme) in self.inner.by_ref() {
             match self.state {
                 State::Clean => {
                     if let Some(token) = word_break(grapheme) {
@@ -74,10 +75,11 @@ impl<'t> Iterator for Lexer<'t> {
 
 #[cfg(test)]
 mod tests {
+    use super::Newline::*;
     use super::Token::{self, *};
 
     fn lex(input: &str) -> Vec<Token<'_>> {
-        super::lex(input).collect()
+        super::iter(input).collect()
     }
 
     #[test]
@@ -97,12 +99,12 @@ mod tests {
 
     #[test]
     fn test_single_lf() {
-        assert_eq!(lex("\n"), vec![Newline]);
+        assert_eq!(lex("\n"), vec![Newline(LF)]);
     }
 
     #[test]
     fn test_single_crlf() {
-        assert_eq!(lex("\r\n"), vec![Newline]);
+        assert_eq!(lex("\r\n"), vec![Newline(CRLF)]);
     }
 
     #[test]
@@ -119,8 +121,8 @@ mod tests {
                 Space,
                 Tab,
                 Word("world"),
-                Newline,
-                Newline,
+                Newline(LF),
+                Newline(CRLF),
                 Word("next"),
                 Tab,
                 Word("line"),
@@ -140,7 +142,10 @@ mod tests {
 
     #[test]
     fn test_multiple_newlines() {
-        assert_eq!(lex("\n\n\r\n"), vec![Newline, Newline, Newline]);
+        assert_eq!(
+            lex("\n\n\r\n"),
+            vec![Newline(LF), Newline(LF), Newline(CRLF)]
+        );
     }
 
     #[test]
@@ -153,7 +158,7 @@ mod tests {
                 Word("b"),
                 Tab,
                 Word("c"),
-                Newline,
+                Newline(LF),
                 Word("d"),
             ]
         );
@@ -163,13 +168,16 @@ mod tests {
     fn test_word_with_mixed_newlines() {
         assert_eq!(
             lex("a\nb\r\nc"),
-            vec![Word("a"), Newline, Word("b"), Newline, Word("c"),]
+            vec![Word("a"), Newline(LF), Word("b"), Newline(CRLF), Word("c"),]
         );
     }
 
     #[test]
     fn test_only_newlines() {
-        assert_eq!(lex("\n\r\n\n"), vec![Newline, Newline, Newline,]);
+        assert_eq!(
+            lex("\n\r\n\n"),
+            vec![Newline(LF), Newline(CRLF), Newline(LF)]
+        );
     }
 
     #[test]
@@ -184,7 +192,7 @@ mod tests {
 
     #[test]
     fn test_crlf_as_newline() {
-        assert_eq!(lex("a\r\nb"), vec![Word("a"), Newline, Word("b")]);
+        assert_eq!(lex("a\r\nb"), vec![Word("a"), Newline(CRLF), Word("b")]);
     }
 
     #[test]
@@ -218,8 +226,8 @@ mod tests {
                 Word("Zöe"),
                 Tab,
                 Word("étoile"),
-                Newline,
-                Newline,
+                Newline(LF),
+                Newline(CRLF),
                 Word("👨‍👩‍👧‍👦"),
             ]
         );
@@ -238,8 +246,8 @@ mod tests {
                 Word("hello\u{A0}🌍"),
                 Tab,
                 Word("world"),
-                Newline,
-                Newline,
+                Newline(LF),
+                Newline(CRLF),
                 Word("next\u{2009}line"),
             ]
         );

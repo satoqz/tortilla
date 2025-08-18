@@ -1,56 +1,21 @@
 use std::iter::Peekable;
 
-use super::Token;
+use super::{Line, Token, Whitespace};
 
-#[derive(Debug, PartialEq)]
-pub struct Whitespace<'t> {
-    pub token: Token<'t>,
-    pub count: usize,
-}
-
-impl Whitespace<'static> {
-    fn spaces(count: usize) -> Self {
-        Self {
-            token: Token::Space,
-            count,
-        }
-    }
-
-    fn tabs(count: usize) -> Self {
-        Self {
-            token: Token::Tab,
-            count,
-        }
-    }
-
-    fn zero() -> Self {
-        Self::spaces(0)
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct Line<'t> {
-    pub indent: Whitespace<'t>,
-    pub comment: Option<Token<'t>>,
-    pub padding: Whitespace<'t>,
-    pub bullet: Option<Token<'t>>,
-    pub words: Vec<&'t str>,
-}
-
-pub struct Parser<I: Iterator> {
+pub(super) struct Parse<I: Iterator> {
     source: Peekable<I>,
 }
 
-pub fn parse<'t, I>(source: I) -> Parser<I>
+pub(super) fn iter<'t, I>(source: I) -> Parse<I>
 where
     I: Iterator<Item = Token<'t>>,
 {
-    Parser {
+    Parse {
         source: source.peekable(),
     }
 }
 
-impl<'t, I> Iterator for Parser<I>
+impl<'t, I> Iterator for Parse<I>
 where
     I: Iterator<Item = Token<'t>>,
 {
@@ -59,17 +24,24 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         self.source.peek()?;
 
+        let indent = self.whitespace();
+        let comment = self.comment();
+        let padding = self.whitespace();
+        let bullet = self.bullet();
+        let (words, newline) = self.words();
+
         Some(Line {
-            indent: self.whitespace(),
-            comment: self.comment(),
-            padding: self.whitespace(),
-            bullet: self.bullet(),
-            words: self.words(),
+            indent,
+            comment,
+            padding,
+            bullet,
+            words,
+            newline,
         })
     }
 }
 
-impl<'t, I> Parser<I>
+impl<'t, I> Parse<I>
 where
     I: Iterator<Item = Token<'t>>,
 {
@@ -78,10 +50,7 @@ where
             .source
             .next_if(|token| *token == Token::Space || *token == Token::Tab)
         else {
-            return Whitespace {
-                token: Token::Space,
-                count: 0,
-            };
+            return Whitespace(Token::Space, 0);
         };
 
         let mut count = 1;
@@ -89,10 +58,7 @@ where
             count += 1;
         }
 
-        Whitespace {
-            token: first,
-            count: count,
-        }
+        Whitespace(first, count)
     }
 
     fn comment(&mut self) -> Option<Token<'t>> {
@@ -111,7 +77,7 @@ where
             };
 
             ["-", "*", "•"].contains(word)
-                || (word.ends_with(&['.', ')'])
+                || (word.ends_with(['.', ')'])
                     && word.len() > 1
                     && word
                         .chars()
@@ -120,18 +86,18 @@ where
         })
     }
 
-    fn words(&mut self) -> Vec<&'t str> {
+    fn words(&mut self) -> (Vec<&'t str>, bool) {
         let mut words = Vec::new();
 
-        while let Some(token) = self.source.next() {
+        for token in self.source.by_ref() {
             match token {
                 Token::Space | Token::Tab => {}
                 Token::Word(word) => words.push(word),
-                Token::Newline => break,
+                Token::Newline(_) => return (words, true),
             }
         }
 
-        words
+        (words, false)
     }
 }
 
@@ -141,11 +107,30 @@ mod tests {
     use super::{Line, Whitespace};
 
     fn parse<'t>(tokens: &[Token<'t>]) -> Vec<Line<'t>> {
-        super::parse(tokens.iter().copied()).collect()
+        super::iter(tokens.iter().copied()).collect()
     }
 
     #[test]
     fn idk() {
+        assert_eq!(
+            parse(&[
+                Word("//"),
+                Space,
+                Word("1."),
+                Space,
+                Word("hi"),
+                Word("hello")
+            ]),
+            vec![Line {
+                indent: Whitespace::zero(),
+                comment: Some(Token::Word("//")),
+                padding: Whitespace::spaces(1),
+                bullet: Some(Token::Word("1.")),
+                words: vec!["hi", "hello"],
+                newline: false,
+            }]
+        );
+
         assert_eq!(
             parse(&[
                 Tab,
@@ -163,6 +148,7 @@ mod tests {
                 padding: Whitespace::spaces(1),
                 bullet: Some(Token::Word("1.")),
                 words: vec!["hi", "hello"],
+                newline: false,
             }]
         );
     }

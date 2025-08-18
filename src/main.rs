@@ -1,28 +1,24 @@
 use std::io::{self, Read, Write};
 
-use tortilla::*;
+const HELP: &str = "Usage: tortilla [-h, --help] [--width <WIDTH>] [--tabs <TABS>] [--crlf]\n";
 
 fn main() -> io::Result<()> {
-    let options = args();
+    let mut toppings = tortilla::Toppings::default();
+    args(&mut toppings)?;
 
     let mut input = String::new();
     io::stdin().read_to_string(&mut input)?;
 
-    let newline = options
-        .newline
-        .unwrap_or(Newline::first_in(&input).unwrap_or_default());
-
     let mut stdout = io::stdout().lock();
 
-    write_all(&mut stdout, transform(lex(&input), options), newline)?;
+    for token in tortilla::wrap(&input, toppings) {
+        stdout.write_all(token.as_bytes())?;
+    }
+
     stdout.flush()
 }
 
-const HELP: &str = "Usage: tortilla [-h, --help] [--width <WIDTH>] [--tabs <TABS>] [--lf] [--crlf]";
-
-fn args() -> Options {
-    let mut options = Options::default();
-
+fn args(toppings: &mut tortilla::Toppings) -> io::Result<()> {
     enum State {
         Clean,
         Width,
@@ -34,16 +30,15 @@ fn args() -> Options {
     for arg in std::env::args().skip(1) {
         match state {
             State::Clean => match arg.as_str() {
-                "-h" | "--help" => {
-                    eprintln!("{HELP}");
-                    std::process::exit(0);
-                }
-
                 "--width" => state = State::Width,
                 "--tabs" => state = State::Tabs,
 
-                "--lf" => options.newline = Some(Newline::LF),
-                "--crlf" => options.newline = Some(Newline::CRLF),
+                "--crlf" => toppings.newline = tortilla::Newline::CRLF,
+
+                "-h" | "--help" => {
+                    io::stderr().lock().write_all(HELP.as_bytes())?;
+                    std::process::exit(0);
+                }
 
                 other => {
                     eprintln!("Unexpected argument '{other}'");
@@ -53,24 +48,24 @@ fn args() -> Options {
 
             State::Width => {
                 state = State::Clean;
-                options.line_width = arg.parse().unwrap_or_else(|err| {
+                toppings.line_width = arg.parse().unwrap_or_else(|err| {
                     eprintln!("Bad argument '{arg}' for option '--width': {err}");
                     std::process::exit(1);
-                })
+                });
             }
 
             State::Tabs => {
                 state = State::Clean;
-                options.tab_width = arg.parse().unwrap_or_else(|err| {
+                toppings.tab_size = arg.parse().unwrap_or_else(|err| {
                     eprintln!("Bad argument '{arg}' for option '--tabs': {err}");
                     std::process::exit(1);
-                })
+                });
             }
         }
     }
 
     match state {
-        State::Clean => return options,
+        State::Clean => return Ok(()),
         State::Width => eprintln!("Missing argument for option '--width'"),
         State::Tabs => eprintln!("Missing argument for option '--tabs'"),
     }
