@@ -10,8 +10,8 @@ categories = ["command-line-utilities", "text-processing"]
 
 license = "MIT OR Apache-2.0"
 
-repository = "https://codeberg.org/satoqz/wraplines"
-homepage = "https://codeberg.org/satoqz/wraplines#readme"
+repository = "https://codeberg.org/satoqz/tortilla"
+homepage = "https://codeberg.org/satoqz/tortilla#readme"
 
 [dependencies]
 unicode-segmentation = "1.12.0"
