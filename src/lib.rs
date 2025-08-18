@@ -58,7 +58,7 @@ impl Newline {
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum Token<'a> {
+pub enum Token<'t> {
     /// A space character (' ').
     Space,
     /// A tab character ('\t').
@@ -66,7 +66,7 @@ pub enum Token<'a> {
     /// A linefeed character ('\n') or a carriage return + linefeed character.
     Newline,
     /// A chain of characters without any whitespace.
-    Word(&'a str),
+    Word(&'t str),
 }
 
 impl Token<'_> {
@@ -85,9 +85,9 @@ impl Token<'_> {
 }
 
 /// Convenience function to write a token stream out to a [std::io::Write].
-pub fn write_all<'a, I>(mut output: impl io::Write, tokens: I, newline: Newline) -> io::Result<()>
+pub fn write_all<'t, I>(mut output: impl io::Write, tokens: I, newline: Newline) -> io::Result<()>
 where
-    I: Iterator<Item = Token<'a>>,
+    I: Iterator<Item = Token<'t>>,
 {
     for token in tokens {
         output.write_all(token.as_bytes(newline))?;
@@ -97,9 +97,9 @@ where
 }
 
 /// Convenience function to write a token stream out to a [std::fmt::Write].
-pub fn format<'a, I>(mut output: impl fmt::Write, tokens: I, newline: Newline) -> fmt::Result
+pub fn format<'t, I>(mut output: impl fmt::Write, tokens: I, newline: Newline) -> fmt::Result
 where
-    I: Iterator<Item = Token<'a>>,
+    I: Iterator<Item = Token<'t>>,
 {
     for token in tokens {
         output.write_str(token.as_str(newline))?;

@@ -4,18 +4,18 @@ use super::{Options, Token};
 
 const COMMENT_TOKENS: &[&str] = &["#", "//", "///", "//!", "--", ";", ";;"];
 
-pub struct Transformer<'a, I> {
+pub struct Transformer<'t, I> {
     source: I,
     options: Options,
 
     line_width: usize,
     newline_count: usize,
-    pending_token: Option<Token<'a>>,
+    pending_token: Option<Token<'t>>,
 }
 
-pub fn transform<'a, I>(source: I, options: Options) -> Transformer<'a, I>
+pub fn transform<'t, I>(source: I, options: Options) -> Transformer<'t, I>
 where
-    I: Iterator<Item = Token<'a>>,
+    I: Iterator<Item = Token<'t>>,
 {
     Transformer {
         source,
@@ -26,11 +26,11 @@ where
     }
 }
 
-impl<'a, I> Iterator for Transformer<'a, I>
+impl<'t, I> Iterator for Transformer<'t, I>
 where
-    I: Iterator<Item = Token<'a>>,
+    I: Iterator<Item = Token<'t>>,
 {
-    type Item = Token<'a>;
+    type Item = Token<'t>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(token) = self.pending_token.take() {

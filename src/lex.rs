@@ -7,9 +7,9 @@ enum State {
     Word(usize),
 }
 
-pub struct Lexer<'a> {
-    input: &'a str,
-    inner: GraphemeIndices<'a>,
+pub struct Lexer<'t> {
+    input: &'t str,
+    inner: GraphemeIndices<'t>,
 
     state: State,
 
@@ -35,8 +35,8 @@ fn word_break(grapheme: &str) -> Option<Token<'static>> {
     })
 }
 
-impl<'a> Iterator for Lexer<'a> {
-    type Item = Token<'a>;
+impl<'t> Iterator for Lexer<'t> {
+    type Item = Token<'t>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(token) = self.pending.take() {
