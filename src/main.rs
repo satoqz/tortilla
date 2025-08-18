@@ -1,6 +1,6 @@
 use std::io::{self, Read, Write};
 
-use wraplines::*;
+use tortilla::*;
 
 fn main() -> io::Result<()> {
     let options = args();
@@ -18,8 +18,7 @@ fn main() -> io::Result<()> {
     stdout.flush()
 }
 
-const HELP: &str =
-    "Usage: wraplines [-h, --help] [--width <WIDTH>] [--tabs <TABS>] [--lf] [--crlf]";
+const HELP: &str = "Usage: tortilla [-h, --help] [--width <WIDTH>] [--tabs <TABS>] [--lf] [--crlf]";
 
 fn args() -> Options {
     let mut options = Options::default();
