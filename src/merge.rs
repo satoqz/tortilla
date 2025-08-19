@@ -1,6 +1,8 @@
 use std::iter::Peekable;
 
-use super::Line;
+use unicode_width::UnicodeWidthStr;
+
+use super::{Line, Token};
 
 pub(super) struct Merge<'t, I>
 where
@@ -19,8 +21,29 @@ where
 }
 
 fn should_merge(upper: &Line<'_>, lower: &Line<'_>) -> bool {
-    upper.indent == lower.indent && upper.comment == lower.comment
-    // TODO: more involved case for padding + bullet
+    !lower.words.is_empty() // Don't touch "empty" lines
+        && lower.bullet.is_none() // Don't touch lines that start their own bullet
+        && upper.indent == lower.indent // Indent must match
+        && upper.comment == lower.comment // Comment token must match
+        && bullet_continuation(upper, lower)
+}
+
+fn bullet_continuation(upper: &Line<'_>, lower: &Line<'_>) -> bool {
+    let bullet = match upper.bullet {
+        // No bullet, padding must match 1 to 1:
+        None => return upper.padding == lower.padding,
+        Some(bullet) => bullet,
+    };
+
+    // Bullets only work with spaces:
+    if upper.padding.0 != Token::Space || lower.padding.0 != Token::Space {
+        return false;
+    }
+
+    // Bullets are followed by a space that must be replicated by the lower
+    // padding.
+    let bullet_width = bullet.as_str().width_cjk() + 1;
+    upper.padding.1 + bullet_width == lower.padding.1
 }
 
 fn merge<'t>(upper: &mut Line<'t>, mut lower: Line<'t>) {
@@ -74,6 +97,18 @@ mod tests {
                 line!(t2, "//", s1, "-", "foo", "bar"),
                 line!(s1, "h"),
                 line!("//", s1, "comment"),
+            ],
+        );
+
+        merge(
+            vec![
+                line!(s4, "//", s1, "-", "foo", "bar"),
+                line!(s4, "//", s3, "", "baz"),
+                line!(s4, "//", s1, "", "nope"),
+            ],
+            vec![
+                line!(s4, "//", s1, "-", "foo", "bar", "baz"),
+                line!(s4, "//", s1, "", "nope"),
             ],
         );
     }

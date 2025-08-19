@@ -13,17 +13,27 @@ impl LineExtension for Line<'_> {
 
 #[macro_export]
 macro_rules! token {
-    [s] => { crate::Token::Space };
-    [t] => { crate::Token::Tab };
-    [lf] => { crate::Token::Newline(crate::Newline::LF) };
-    [crlf] => { crate::Token::Newline(crate::Newline::CRLF) };
-    [$word:expr] => { crate::Token::Word($word) };
+    (s) => {
+        crate::Token::Space
+    };
+    (t) => {
+        crate::Token::Tab
+    };
+    (lf) => {
+        crate::Token::Newline(crate::Newline::LF)
+    };
+    (crlf) => {
+        crate::Token::Newline(crate::Newline::CRLF)
+    };
+    ($word:expr) => {
+        crate::Token::Word($word)
+    };
 }
 
 #[macro_export]
 macro_rules! tokens {
     ($($token:tt),*) => {
-        vec![$(crate::token![$token]),*]
+        vec![$(crate::token!($token)),*]
     };
 
 }
