@@ -24,26 +24,29 @@ fn should_merge(upper: &Line<'_>, lower: &Line<'_>) -> bool {
     !upper.words.is_empty() && !lower.words.is_empty() // Don't touch "empty" lines
         && lower.bullet.is_none() // Don't touch lines that start their own bullet
         && upper.comment == lower.comment // Comment token must match
-        && upper.indent == lower.indent // Indent must match
         && bullet_continuation(upper, lower)
 }
 
 fn bullet_continuation(upper: &Line<'_>, lower: &Line<'_>) -> bool {
     let bullet = match upper.bullet {
-        // No bullet, padding must match 1 to 1:
-        None => return upper.padding == lower.padding,
+        // No bullet, padding and indent must match 1 to 1:
+        None => return upper.padding == lower.padding && upper.indent == lower.indent,
         Some(bullet) => bullet,
     };
 
-    // Bullets only work with spaces:
-    if upper.padding.0 != Token::Space || lower.padding.0 != Token::Space {
-        return false;
-    }
+    // If indents are equal, we only need to check the padding:
+    let (upper_whitespace, lower_whitespace) = match upper.indent == lower.indent {
+        true => (&upper.padding, &lower.padding),
+        false => (&upper.indent, &lower.indent),
+    };
 
-    // Bullets are followed by a space that must be replicated by the lower
-    // padding.
+    // +1 for space between bullet and word.
     let bullet_width = bullet.as_str().width_cjk() + 1;
-    upper.padding.1 + bullet_width == lower.padding.1
+
+    // Bullets only work with space padding.
+    upper_whitespace.0 == Token::Space
+        && lower_whitespace.0 == Token::Space
+        && upper_whitespace.1 + bullet_width == lower_whitespace.1
 }
 
 fn merge<'t>(upper: &mut Line<'t>, mut lower: Line<'t>) {
