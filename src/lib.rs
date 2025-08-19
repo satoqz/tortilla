@@ -28,7 +28,7 @@ impl Newline {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum Token<'t> {
+enum Token<'t> {
     /// A space character (' ').
     Space,
     /// A tab character ('\t').
@@ -40,17 +40,13 @@ pub enum Token<'t> {
 }
 
 impl<'t> Token<'t> {
-    pub fn as_str(&self) -> &'t str {
+    fn as_str(&self) -> &'t str {
         match self {
             Self::Space => " ",
             Self::Tab => "\t",
             Self::Word(s) => s,
             Self::Newline(newline) => newline.as_str(),
         }
-    }
-
-    pub fn as_bytes(&self) -> &[u8] {
-        self.as_str().as_bytes()
     }
 }
 
@@ -103,7 +99,7 @@ impl Toppings {
     }
 }
 
-pub fn wrap<'t>(input: &'t str, toppings: Toppings) -> impl Iterator<Item = Token<'t>> {
+pub fn wrap<'t>(input: &'t str, toppings: Toppings) -> impl Iterator<Item = &'t str> {
     let lines = parse::iter(lex::iter(input));
-    wrap::iter(merge::iter(lines), toppings)
+    wrap::iter(merge::iter(lines), toppings).map(|token| token.as_str())
 }
