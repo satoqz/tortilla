@@ -2,6 +2,7 @@ use unicode_width::UnicodeWidthStr;
 
 use super::{Line, Token, Toppings};
 
+#[derive(Debug)]
 enum Section {
     Indent,
     Comment,
@@ -19,6 +20,7 @@ struct LineWrap<'t> {
     section: Section,
     width: usize,
     word: usize,
+    first_word: bool,
 }
 
 impl<'t> LineWrap<'t> {
@@ -29,6 +31,9 @@ impl<'t> LineWrap<'t> {
             section: Section::Indent,
             width: 0,
             word: 0,
+
+            // TODO: This should be a distinct state instead.
+            first_word: true,
         }
     }
 }
@@ -82,11 +87,12 @@ impl<'t, 'idk> Iterator for LineWrap<'t> {
                     if let Some(s) = self.line.words.get(self.word) {
                         let next_width = self.width + s.width_cjk();
 
-                        if next_width > self.toppings.width {
+                        if next_width > self.toppings.width && !self.first_word {
                             self.section = Section::Newline;
                             continue;
                         }
 
+                        self.first_word = false;
                         self.word += 1;
 
                         if self.word == self.line.words.len() {
@@ -113,6 +119,7 @@ impl<'t, 'idk> Iterator for LineWrap<'t> {
                 Section::Newline => {
                     self.section = Section::Indent;
                     self.width = 0;
+                    self.first_word = true;
                     break Some(Token::Newline(self.toppings.newline));
                 }
 
