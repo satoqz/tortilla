@@ -120,5 +120,14 @@ mod tests {
             parse(tokens!(t, t, "//", s, "1.", s, "hi", "hello")),
             vec![line!(t2, "//", s1, "1.", "hi", "hello").trimmed()]
         );
+
+        assert_eq!(
+            parse(tokens!(lf, "testing", lf, lf)),
+            vec![
+                line!(s0, "", s0, ""),
+                line!(s0, "", s0, "", "testing"),
+                line!(s0, "", s0, "")
+            ]
+        )
     }
 }

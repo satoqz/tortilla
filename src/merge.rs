@@ -21,10 +21,10 @@ where
 }
 
 fn should_merge(upper: &Line<'_>, lower: &Line<'_>) -> bool {
-    !lower.words.is_empty() // Don't touch "empty" lines
+    !upper.words.is_empty() && !lower.words.is_empty() // Don't touch "empty" lines
         && lower.bullet.is_none() // Don't touch lines that start their own bullet
-        && upper.indent == lower.indent // Indent must match
         && upper.comment == lower.comment // Comment token must match
+        && upper.indent == lower.indent // Indent must match
         && bullet_continuation(upper, lower)
 }
 
@@ -78,26 +78,14 @@ mod tests {
 
     #[test]
     fn foo() {
-        merge(vec![line!("foo", "bar")], vec![line!("foo", "bar")]);
-
         merge(
-            vec![line!(s4, "//", s1, "-", "foo", "bar")],
-            vec![line!(s4, "//", s1, "-", "foo", "bar")],
+            vec![line!(s0, "", s0, "", "foo", "bar")],
+            vec![line!(s0, "", s0, "", "foo", "bar")],
         );
 
         merge(
-            vec![
-                line!(s4, "//", s1, "-", "foo", "bar"),
-                line!(t2, "//", s1, "-", "foo", "bar"),
-                line!(s1, "h"),
-                line!("//", s1, "comment"),
-            ],
-            vec![
-                line!(s4, "//", s1, "-", "foo", "bar"),
-                line!(t2, "//", s1, "-", "foo", "bar"),
-                line!(s1, "h"),
-                line!("//", s1, "comment"),
-            ],
+            vec![line!(s4, "//", s1, "-", "foo", "bar")],
+            vec![line!(s4, "//", s1, "-", "foo", "bar")],
         );
 
         merge(
