@@ -8,6 +8,15 @@ fn main() -> io::Result<()> {
     let mut input = String::new();
     io::stdin().read_to_string(&mut input)?;
 
+    #[cfg(unix)]
+    let mut stdout = {
+        // This is ~50% faster than io::stdout() on macOS when processing
+        // large (several MB) files.
+        use std::os::unix::io::FromRawFd;
+        io::BufWriter::new(unsafe { std::fs::File::from_raw_fd(1) })
+    };
+
+    #[cfg(not(unix))]
     let mut stdout = io::stdout().lock();
 
     for token in tortilla::wrap(&input, toppings) {
