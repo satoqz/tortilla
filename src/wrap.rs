@@ -2,29 +2,30 @@ use unicode_width::UnicodeWidthStr;
 
 use super::{Line, Newline, Token, Toppings};
 
-enum Fit {
+pub enum Fit {
     First,
     This,
     Next,
 }
 
-trait Strategy {
-    fn fit(&mut self, width: usize) -> Fit;
+pub trait Sauce {
+    fn new(words: &[&str], max: usize) -> Self;
+    fn fit(&mut self, words: &[&str], idx: usize) -> Fit;
 }
 
-struct NaiveStrategy {
+pub struct Naive {
     max: usize,
     width: usize,
 }
 
-impl NaiveStrategy {
-    fn new(max: usize) -> Self {
+impl Sauce for Naive {
+    fn new(_: &[&str], max: usize) -> Self {
         Self { max, width: 0 }
     }
-}
 
-impl Strategy for NaiveStrategy {
-    fn fit(&mut self, width: usize) -> Fit {
+    fn fit(&mut self, words: &[&str], idx: usize) -> Fit {
+        let width = words[idx].width_cjk();
+
         let (updated, fit) = match self.width {
             0 => (width, Fit::First),
             // < and not <= to leave room for a space before the word.
@@ -49,9 +50,9 @@ enum State {
     Final,
 }
 
-struct LineWrap<'t, S: Strategy> {
+struct LineWrap<'t, S: Sauce> {
     line: Line<'t>,
-    strategy: S,
+    sauce: S,
     state: State,
     newline: Newline,
     pending: Option<&'t str>,
@@ -60,7 +61,7 @@ struct LineWrap<'t, S: Strategy> {
     bullet_width: usize,
 }
 
-impl<'t> LineWrap<'t, NaiveStrategy> {
+impl<'t, S: Sauce> LineWrap<'t, S> {
     fn new(line: Line<'t>, toppings: &Toppings) -> Self {
         let width = |token| match token {
             Token::Space => 1,
@@ -77,10 +78,11 @@ impl<'t> LineWrap<'t, NaiveStrategy> {
             + bullet_width;
 
         let breakable_width = toppings.width.saturating_sub(unbreakable_width);
+        let strategy = S::new(&line.words, breakable_width);
 
         Self {
             line,
-            strategy: NaiveStrategy::new(breakable_width),
+            sauce: strategy,
             newline: toppings.newline,
             state: State::Indent,
             pending: None,
@@ -91,7 +93,7 @@ impl<'t> LineWrap<'t, NaiveStrategy> {
     }
 }
 
-impl<'t, S: Strategy> Iterator for LineWrap<'t, S> {
+impl<'t, S: Sauce> Iterator for LineWrap<'t, S> {
     type Item = Token<'t>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -170,23 +172,22 @@ impl<'t, S: Strategy> Iterator for LineWrap<'t, S> {
                         }
                     };
 
-                    self.word_idx += 1;
-
-                    match self.strategy.fit(s.width_cjk()) {
-                        Fit::First => {
-                            break Some(Token::Word(s));
-                        }
+                    let token = match self.sauce.fit(&self.line.words, self.word_idx) {
+                        Fit::First => Token::Word(s),
                         Fit::This => {
                             self.state = State::Words;
                             self.pending = Some(s);
-                            break Some(Token::Space);
+                            Token::Space
                         }
                         Fit::Next => {
                             self.state = State::Indent;
                             self.pending = Some(s);
-                            break Some(Token::Newline(self.newline));
+                            Token::Newline(self.newline)
                         }
-                    }
+                    };
+
+                    self.word_idx += 1;
+                    break Some(token);
                 }
 
                 State::Final => {
@@ -197,26 +198,30 @@ impl<'t, S: Strategy> Iterator for LineWrap<'t, S> {
     }
 }
 
-pub(super) struct Wrap<'t, I> {
-    source: I,
+pub(super) struct Wrap<'t, L, S: Sauce> {
+    lines: L,
     toppings: Toppings,
-    inner: Option<LineWrap<'t, NaiveStrategy>>,
+    inner: Option<LineWrap<'t, S>>,
 }
 
-pub(super) fn iter<'t, I>(source: I, toppings: Toppings) -> Wrap<'t, I>
+impl<'t, L, S> Wrap<'t, L, S>
 where
-    I: Iterator<Item = Line<'t>>,
+    L: Iterator<Item = Line<'t>>,
+    S: Sauce,
 {
-    Wrap {
-        source,
-        toppings,
-        inner: None,
+    pub fn new(lines: L, toppings: Toppings) -> Self {
+        Self {
+            lines,
+            toppings,
+            inner: None,
+        }
     }
 }
 
-impl<'t, I> Iterator for Wrap<'t, I>
+impl<'t, I, S> Iterator for Wrap<'t, I, S>
 where
     I: Iterator<Item = Line<'t>>,
+    S: Sauce,
 {
     type Item = Token<'t>;
 
@@ -226,7 +231,7 @@ where
                 Some(inner) => inner,
                 None => self
                     .inner
-                    .insert(LineWrap::new(self.source.next()?, &self.toppings)),
+                    .insert(LineWrap::new(self.lines.next()?, &self.toppings)),
             };
 
             match inner.next() {

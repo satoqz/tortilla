@@ -17,12 +17,14 @@ pub(super) struct Lex<'t> {
     pending: Option<Token<'static>>,
 }
 
-pub(super) fn iter(input: &str) -> Lex<'_> {
-    Lex {
-        input,
-        state: State::Clean,
-        inner: input.grapheme_indices(true),
-        pending: None,
+impl<'t> Lex<'t> {
+    pub fn new(input: &'t str) -> Self {
+        Self {
+            input,
+            state: State::Clean,
+            inner: input.grapheme_indices(true),
+            pending: None,
+        }
     }
 }
 
@@ -78,7 +80,7 @@ mod tests {
     use crate::{Token, tokens};
 
     fn lex(input: &str) -> Vec<Token<'_>> {
-        super::iter(input).collect()
+        super::Lex::new(input).collect()
     }
 
     #[test]

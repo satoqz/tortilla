@@ -4,19 +4,21 @@ use unicode_width::UnicodeWidthStr;
 
 use super::{Line, Token};
 
-pub(super) struct Merge<'t, I>
+pub(super) struct Merge<'t, L>
 where
-    I: Iterator<Item = Line<'t>>,
+    L: Iterator<Item = Line<'t>>,
 {
-    source: Peekable<I>,
+    lines: Peekable<L>,
 }
 
-pub(super) fn iter<'t, I>(source: I) -> Merge<'t, I>
+impl<'t, L> Merge<'t, L>
 where
-    I: Iterator<Item = Line<'t>>,
+    L: Iterator<Item = Line<'t>>,
 {
-    Merge {
-        source: source.peekable(),
+    pub fn new(lines: L) -> Self {
+        Self {
+            lines: lines.peekable(),
+        }
     }
 }
 
@@ -54,16 +56,16 @@ fn merge<'t>(upper: &mut Line<'t>, mut lower: Line<'t>) {
     upper.newline &= lower.newline;
 }
 
-impl<'t, I> Iterator for Merge<'t, I>
+impl<'t, L> Iterator for Merge<'t, L>
 where
-    I: Iterator<Item = Line<'t>>,
+    L: Iterator<Item = Line<'t>>,
 {
     type Item = Line<'t>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut upper = self.source.next()?;
+        let mut upper = self.lines.next()?;
 
-        while let Some(lower) = self.source.next_if(|lower| should_merge(&upper, lower)) {
+        while let Some(lower) = self.lines.next_if(|lower| should_merge(&upper, lower)) {
             merge(&mut upper, lower);
         }
 
@@ -76,7 +78,10 @@ mod tests {
     use crate::{Line, line};
 
     fn merge<'t>(before: Vec<Line<'t>>, after: Vec<Line<'t>>) {
-        assert_eq!(super::iter(before.into_iter()).collect::<Vec<_>>(), after);
+        assert_eq!(
+            super::Merge::new(before.into_iter()).collect::<Vec<_>>(),
+            after
+        );
     }
 
     #[test]

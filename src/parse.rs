@@ -2,27 +2,29 @@ use std::iter::Peekable;
 
 use super::{Line, Token, Whitespace};
 
-pub(super) struct Parse<I: Iterator> {
-    source: Peekable<I>,
+pub(super) struct Parse<T: Iterator> {
+    tokens: Peekable<T>,
 }
 
-pub(super) fn iter<'t, I>(source: I) -> Parse<I>
+impl<'t, T> Parse<T>
 where
-    I: Iterator<Item = Token<'t>>,
+    T: Iterator<Item = Token<'t>>,
 {
-    Parse {
-        source: source.peekable(),
+    pub fn new(tokens: T) -> Self {
+        Self {
+            tokens: tokens.peekable(),
+        }
     }
 }
 
-impl<'t, I> Iterator for Parse<I>
+impl<'t, T> Iterator for Parse<T>
 where
-    I: Iterator<Item = Token<'t>>,
+    T: Iterator<Item = Token<'t>>,
 {
     type Item = Line<'t>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.source.peek()?;
+        self.tokens.peek()?;
 
         let indent = self.whitespace();
         let comment = self.comment();
@@ -47,14 +49,14 @@ where
 {
     fn whitespace(&mut self) -> Whitespace<'t> {
         let Some(first) = self
-            .source
+            .tokens
             .next_if(|token| *token == Token::Space || *token == Token::Tab)
         else {
             return Whitespace(Token::Space, 0);
         };
 
         let mut count = 1;
-        while self.source.next_if_eq(&first).is_some() {
+        while self.tokens.next_if_eq(&first).is_some() {
             count += 1;
         }
 
@@ -64,14 +66,14 @@ where
     fn comment(&mut self) -> Option<Token<'t>> {
         const COMMENT_TOKENS: &[&str] = &["#", ">", ";", "//", "--", ";;", "///", "//!"];
 
-        self.source.next_if(|token| match token {
+        self.tokens.next_if(|token| match token {
             Token::Word(word) => COMMENT_TOKENS.contains(word),
             _ => false,
         })
     }
 
     fn bullet(&mut self) -> Option<Token<'t>> {
-        self.source.next_if(|token| {
+        self.tokens.next_if(|token| {
             let Token::Word(word) = token else {
                 return false;
             };
@@ -89,7 +91,7 @@ where
     fn words(&mut self) -> (Vec<&'t str>, bool) {
         let mut words = Vec::new();
 
-        for token in self.source.by_ref() {
+        for token in self.tokens.by_ref() {
             match token {
                 Token::Space | Token::Tab => {}
                 Token::Word(word) => words.push(word),
@@ -106,7 +108,7 @@ mod tests {
     use crate::{Line, Token, line, testing::LineExtension, tokens};
 
     fn parse<'t>(tokens: Vec<Token<'t>>) -> Vec<Line<'t>> {
-        super::iter(tokens.into_iter()).collect()
+        super::Parse::new(tokens.into_iter()).collect()
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use super::{Line, Token, Whitespace};
 
-pub(super) trait LineExtension {
+pub trait LineExtension {
     fn trimmed(self) -> Self;
 }
 
@@ -38,7 +38,7 @@ macro_rules! tokens {
 
 }
 
-pub(super) fn whitespace_notation(pattern: &str) -> Whitespace<'static> {
+pub fn whitespace_notation(pattern: &str) -> Whitespace<'static> {
     let token = match pattern.chars().next() {
         Some('s') => Token::Space,
         Some('t') => Token::Tab,

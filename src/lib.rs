@@ -6,6 +6,13 @@ mod wrap;
 #[cfg(test)]
 mod testing;
 
+use lex::Lex;
+use merge::Merge;
+use parse::Parse;
+use wrap::{Sauce, Wrap};
+
+pub use wrap::Naive;
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Newline {
     LF,
@@ -94,7 +101,7 @@ impl Toppings {
     }
 }
 
-pub fn wrap(input: &str, toppings: Toppings) -> impl Iterator<Item = &str> {
-    let lines = parse::iter(lex::iter(input));
-    wrap::iter(merge::iter(lines), toppings).map(|token| token.as_str())
+pub fn wrap<S: Sauce>(input: &str, toppings: Toppings) -> impl Iterator<Item = &str> {
+    let lines = Parse::new(Lex::new(input));
+    Wrap::<Merge<Parse<Lex>>, S>::new(Merge::new(lines), toppings).map(|token| token.as_str())
 }

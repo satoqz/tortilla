@@ -19,7 +19,7 @@ fn main() -> io::Result<()> {
     #[cfg(not(unix))]
     let mut stdout = io::stdout().lock();
 
-    for token in tortilla::wrap(&input, toppings) {
+    for token in tortilla::wrap::<tortilla::Naive>(&input, toppings) {
         stdout.write_all(token.as_bytes())?;
     }
 
