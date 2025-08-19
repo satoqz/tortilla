@@ -75,8 +75,7 @@ impl<'t> Iterator for Lex<'t> {
 
 #[cfg(test)]
 mod tests {
-    use super::Newline::*;
-    use super::Token::{self, *};
+    use crate::{Token, tokens};
 
     fn lex(input: &str) -> Vec<Token<'_>> {
         super::iter(input).collect()
@@ -84,172 +83,125 @@ mod tests {
 
     #[test]
     fn test_empty_input() {
-        assert_eq!(lex(""), vec![]);
+        assert_eq!(lex(""), tokens!());
     }
 
     #[test]
     fn test_single_space() {
-        assert_eq!(lex(" "), vec![Space]);
+        assert_eq!(lex(" "), tokens!(s));
     }
 
     #[test]
     fn test_single_tab() {
-        assert_eq!(lex("\t"), vec![Tab]);
+        assert_eq!(lex("\t"), tokens!(t));
     }
 
     #[test]
     fn test_single_lf() {
-        assert_eq!(lex("\n"), vec![Newline(LF)]);
+        assert_eq!(lex("\n"), tokens!(lf));
     }
 
     #[test]
     fn test_single_crlf() {
-        assert_eq!(lex("\r\n"), vec![Newline(CRLF)]);
+        assert_eq!(lex("\r\n"), tokens!(crlf));
     }
 
     #[test]
     fn test_single_word() {
-        assert_eq!(lex("hello"), vec![Word("hello")]);
+        assert_eq!(lex("hello"), tokens!("hello"));
     }
 
     #[test]
     fn test_mixed_tokens() {
         assert_eq!(
             lex("hello \tworld\n\r\nnext\tline"),
-            vec![
-                Word("hello"),
-                Space,
-                Tab,
-                Word("world"),
-                Newline(LF),
-                Newline(CRLF),
-                Word("next"),
-                Tab,
-                Word("line"),
-            ]
+            tokens!("hello", s, t, "world", lf, crlf, "next", t, "line")
         );
     }
 
     #[test]
     fn test_multiple_spaces() {
-        assert_eq!(lex("   "), vec![Space, Space, Space]);
+        assert_eq!(lex("   "), tokens!(s, s, s));
     }
 
     #[test]
     fn test_multiple_tabs() {
-        assert_eq!(lex("\t\t\t"), vec![Tab, Tab, Tab]);
+        assert_eq!(lex("\t\t\t"), tokens!(t, t, t));
     }
 
     #[test]
     fn test_multiple_newlines() {
-        assert_eq!(
-            lex("\n\n\r\n"),
-            vec![Newline(LF), Newline(LF), Newline(CRLF)]
-        );
+        assert_eq!(lex("\n\n\r\n"), tokens!(lf, lf, crlf));
     }
 
     #[test]
     fn test_word_with_spaces_and_tabs() {
-        assert_eq!(
-            lex("a b\tc\nd"),
-            vec![
-                Word("a"),
-                Space,
-                Word("b"),
-                Tab,
-                Word("c"),
-                Newline(LF),
-                Word("d"),
-            ]
-        );
+        assert_eq!(lex("a b\tc\nd"), tokens!("a", s, "b", t, "c", lf, "d"));
     }
 
     #[test]
     fn test_word_with_mixed_newlines() {
-        assert_eq!(
-            lex("a\nb\r\nc"),
-            vec![Word("a"), Newline(LF), Word("b"), Newline(CRLF), Word("c"),]
-        );
+        assert_eq!(lex("a\nb\r\nc"), tokens!("a", lf, "b", crlf, "c"));
     }
 
     #[test]
     fn test_only_newlines() {
-        assert_eq!(
-            lex("\n\r\n\n"),
-            vec![Newline(LF), Newline(CRLF), Newline(LF)]
-        );
+        assert_eq!(lex("\n\r\n\n"), tokens!(lf, crlf, lf));
     }
 
     #[test]
     fn test_lone_cr_in_word() {
-        assert_eq!(lex("a\rb"), vec![Word("a\rb")]);
+        assert_eq!(lex("a\rb"), tokens!("a\rb"));
     }
 
     #[test]
     fn test_cr_not_followed_by_lf() {
-        assert_eq!(lex("a\r"), vec![Word("a\r")]);
+        assert_eq!(lex("a\r"), tokens!("a\r"));
     }
 
     #[test]
     fn test_crlf_as_newline() {
-        assert_eq!(lex("a\r\nb"), vec![Word("a"), Newline(CRLF), Word("b")]);
+        assert_eq!(lex("a\r\nb"), tokens!("a", crlf, "b"));
     }
 
     #[test]
     fn test_emoji() {
-        assert_eq!(lex("hello🇩🇪world"), vec![Word("hello🇩🇪world")]);
+        assert_eq!(lex("hello🇩🇪world"), tokens!("hello🇩🇪world"));
     }
 
     #[test]
     fn test_combining_mark() {
-        assert_eq!(lex("café"), vec![Word("café")]);
+        assert_eq!(lex("café"), tokens!("café"));
     }
 
     #[test]
     fn test_multibyte_chars() {
-        assert_eq!(lex("汉字 test"), vec![Word("汉字"), Space, Word("test")]);
+        assert_eq!(lex("汉字 test"), tokens!("汉字", s, "test"));
     }
 
     #[test]
     fn test_emoji_with_spaces() {
-        assert_eq!(
-            lex("hello 🇩🇪 world"),
-            vec![Word("hello"), Space, Word("🇩🇪"), Space, Word("world"),]
-        );
+        assert_eq!(lex("hello 🇩🇪 world"), tokens!("hello", s, "🇩🇪", s, "world"));
     }
 
     #[test]
     fn test_complex_grapheme_clusters() {
         assert_eq!(
             lex("Zöe\tétoile\n\r\n👨‍👩‍👧‍👦"),
-            vec![
-                Word("Zöe"),
-                Tab,
-                Word("étoile"),
-                Newline(LF),
-                Newline(CRLF),
-                Word("👨‍👩‍👧‍👦"),
-            ]
+            tokens!("Zöe", t, "étoile", lf, crlf, "👨‍👩‍👧‍👦")
         );
     }
 
     #[test]
     fn test_nbsp_as_part_of_word() {
-        assert_eq!(lex("hello\u{A0}world"), vec![Word("hello\u{A0}world")]);
+        assert_eq!(lex("hello\u{A0}world"), tokens!("hello\u{A0}world"));
     }
 
     #[test]
     fn test_mixed_unicode_and_ascii() {
         assert_eq!(
             lex("hello\u{A0}🌍\tworld\n\r\nnext\u{2009}line"),
-            vec![
-                Word("hello\u{A0}🌍"),
-                Tab,
-                Word("world"),
-                Newline(LF),
-                Newline(CRLF),
-                Word("next\u{2009}line"),
-            ]
+            tokens!("hello\u{A0}🌍", t, "world", lf, crlf, "next\u{2009}line")
         );
     }
 }

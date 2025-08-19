@@ -3,6 +3,9 @@ mod merge;
 mod parse;
 mod wrap;
 
+#[cfg(test)]
+mod testing;
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Newline {
     LF,
