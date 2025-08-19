@@ -94,7 +94,7 @@ impl Toppings {
     }
 }
 
-pub fn wrap<'t>(input: &'t str, toppings: Toppings) -> impl Iterator<Item = &'t str> {
+pub fn wrap(input: &str, toppings: Toppings) -> impl Iterator<Item = &str> {
     let lines = parse::iter(lex::iter(input));
     wrap::iter(merge::iter(lines), toppings).map(|token| token.as_str())
 }

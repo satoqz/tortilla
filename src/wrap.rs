@@ -25,16 +25,15 @@ impl NaiveStrategy {
 
 impl Strategy for NaiveStrategy {
     fn fit(&mut self, width: usize) -> Fit {
-        if self.width == 0 {
-            self.width = width;
-            Fit::First
-        } else if self.width + width + 1 <= self.max {
-            self.width += width + 1;
-            Fit::This
-        } else {
-            self.width = width;
-            Fit::Next
-        }
+        let (updated, fit) = match self.width {
+            0 => (width, Fit::First),
+            // < and not <= to leave room for a space before the word.
+            _ if self.width + width < self.max => (self.width + width + 1, Fit::This),
+            _ => (width, Fit::Next),
+        };
+
+        self.width = updated;
+        fit
     }
 }
 
