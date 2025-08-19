@@ -19,7 +19,7 @@ impl Default for Newline {
 }
 
 impl Newline {
-    pub fn as_str(&self) -> &'static str {
+    fn as_str(&self) -> &'static str {
         match self {
             Self::LF => "\n",
             Self::CRLF => "\r\n",
@@ -63,39 +63,34 @@ struct Line<'t> {
     newline: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Toppings {
-    /// Maximum line width to wrap at.
-    pub line_width: usize,
-    /// How much a tab indent contributes to line width.
-    pub tab_size: usize,
-
-    pub newline: Newline,
+    tabs: usize,
+    width: usize,
+    newline: Newline,
 }
 
 impl Default for Toppings {
     fn default() -> Self {
         Self {
-            line_width: 80,
-            tab_size: 4,
+            tabs: 4,
+            width: 80,
             newline: Newline::default(),
         }
     }
 }
 
 impl Toppings {
-    pub fn line_width(self, n: usize) -> Self {
-        Self {
-            line_width: n,
-            ..self
-        }
+    pub fn tabs(self, tabs: usize) -> Self {
+        Self { tabs, ..self }
     }
 
-    pub fn tab_size(self, n: usize) -> Self {
-        Self {
-            tab_size: n,
-            ..self
-        }
+    pub fn width(self, width: usize) -> Self {
+        Self { width, ..self }
+    }
+
+    pub fn newline(self, newline: Newline) -> Self {
+        Self { newline, ..self }
     }
 }
 

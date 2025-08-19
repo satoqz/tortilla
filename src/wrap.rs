@@ -180,7 +180,7 @@ where
     fn token_width(&self, token: Token<'t>) -> usize {
         match token {
             Token::Space | Token::Newline(_) => 1,
-            Token::Tab => self.toppings.tab_size,
+            Token::Tab => self.toppings.tabs,
             Token::Word(s) => s.width_cjk(),
         }
     }

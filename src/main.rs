@@ -3,8 +3,7 @@ use std::io::{self, Read, Write};
 const HELP: &str = "Usage: tortilla [-h, --help] [--width <WIDTH>] [--tabs <TABS>] [--crlf]\n";
 
 fn main() -> io::Result<()> {
-    let mut toppings = tortilla::Toppings::default();
-    args(&mut toppings)?;
+    let toppings = order()?;
 
     let mut input = String::new();
     io::stdin().read_to_string(&mut input)?;
@@ -18,57 +17,47 @@ fn main() -> io::Result<()> {
     stdout.flush()
 }
 
-fn args(toppings: &mut tortilla::Toppings) -> io::Result<()> {
-    enum State {
-        Clean,
-        Width,
-        Tabs,
+fn order() -> io::Result<tortilla::Toppings> {
+    let mut args = std::env::args().skip(1);
+    let mut toppings = tortilla::Toppings::default();
+
+    macro_rules! exit {
+        ($($arg:tt)*) => {{
+            eprintln!($($arg)*);
+            std::process::exit(1);
+        }};
     }
 
-    let mut state = State::Clean;
-
-    for arg in std::env::args().skip(1) {
-        match state {
-            State::Clean => match arg.as_str() {
-                "--width" => state = State::Width,
-                "--tabs" => state = State::Tabs,
-
-                "--crlf" => toppings.newline = tortilla::Newline::CRLF,
-
-                "-h" | "--help" => {
-                    io::stderr().lock().write_all(HELP.as_bytes())?;
-                    std::process::exit(0);
-                }
-
-                other => {
-                    eprintln!("Unexpected argument '{other}'");
-                    std::process::exit(1);
-                }
-            },
-
-            State::Width => {
-                state = State::Clean;
-                toppings.line_width = arg.parse().unwrap_or_else(|err| {
-                    eprintln!("Bad argument '{arg}' for option '--width': {err}");
-                    std::process::exit(1);
-                });
+    while let Some(flag) = args.next() {
+        match flag.as_str() {
+            "--width" => {
+                let Some(value) = args.next() else {
+                    exit!("Missing value for flag '--width'");
+                };
+                toppings = toppings.width(value.parse().unwrap_or_else(|err| {
+                    exit!("Bad value '{value}' for option '--width': {err}");
+                }));
             }
 
-            State::Tabs => {
-                state = State::Clean;
-                toppings.tab_size = arg.parse().unwrap_or_else(|err| {
-                    eprintln!("Bad argument '{arg}' for option '--tabs': {err}");
-                    std::process::exit(1);
-                });
+            "--tabs" => {
+                let Some(value) = args.next() else {
+                    exit!("Missing value for flag '--tabs'");
+                };
+                toppings = toppings.tabs(value.parse().unwrap_or_else(|err| {
+                    exit!("Bad value '{value}' for option '--tabs': {err}");
+                }));
             }
+
+            "--crlf" => toppings = toppings.newline(tortilla::Newline::CRLF),
+
+            "-h" | "--help" => {
+                io::stderr().lock().write_all(HELP.as_bytes())?;
+                std::process::exit(0);
+            }
+
+            other => exit!("Unexpected argument '{other}'"),
         }
     }
 
-    match state {
-        State::Clean => return Ok(()),
-        State::Width => eprintln!("Missing argument for option '--width'"),
-        State::Tabs => eprintln!("Missing argument for option '--tabs'"),
-    }
-
-    std::process::exit(1);
+    Ok(toppings)
 }
