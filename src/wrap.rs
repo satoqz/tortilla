@@ -3,32 +3,150 @@ use unicode_width::UnicodeWidthStr;
 use super::{Line, Token, Toppings};
 
 enum Section {
-    Indent(usize),
+    Indent,
     Comment,
-    Padding(usize),
+    Padding,
     Bullet,
-    Words(usize),
-    Space(usize),
+    Words,
+    Space,
+    Newline,
     Final,
 }
 
-struct State<'t> {
+struct LineWrap<'t> {
     line: Line<'t>,
-    width: usize,
+    toppings: Toppings,
     section: Section,
+    width: usize,
+    word: usize,
+}
+
+impl<'t> LineWrap<'t> {
+    fn new(line: Line<'t>, toppings: Toppings) -> Self {
+        Self {
+            line,
+            toppings,
+            section: Section::Indent,
+            width: 0,
+            word: 0,
+        }
+    }
+}
+
+impl<'t, 'idk> Iterator for LineWrap<'t> {
+    type Item = Token<'t>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            match self.section {
+                Section::Indent if self.line.indent.1 == 0 => {
+                    self.section = Section::Comment;
+                }
+
+                Section::Indent => {
+                    self.line.indent.1 -= 1;
+                    break Some(self.line.indent.0);
+                }
+
+                Section::Comment => {
+                    self.section = Section::Padding;
+                    if let Some(token) = self.line.comment {
+                        break Some(token);
+                    }
+                }
+
+                Section::Padding if self.line.padding.1 == 0 => {
+                    self.section = Section::Bullet;
+                }
+
+                Section::Padding => {
+                    self.line.padding.1 -= 1;
+                    break Some(self.line.padding.0);
+                }
+
+                Section::Bullet => {
+                    if let Some(token) = self.line.bullet {
+                        self.section = Section::Space;
+                        break Some(token);
+                    } else {
+                        self.section = Section::Words;
+                    }
+                }
+
+                Section::Space => {
+                    self.section = Section::Words;
+                    break Some(Token::Space);
+                }
+
+                Section::Words => {
+                    if let Some(s) = self.line.words.get(self.word) {
+                        let next_width = self.width + s.width_cjk();
+
+                        if next_width > self.toppings.width {
+                            self.section = Section::Newline;
+                            continue;
+                        }
+
+                        self.word += 1;
+
+                        if self.word == self.line.words.len() {
+                            self.section = Section::Words;
+                            break Some(Token::Word(s));
+                        }
+
+                        if next_width + 1 > self.toppings.width {
+                            self.section = Section::Newline;
+                        } else {
+                            self.section = Section::Space;
+                        }
+
+                        break Some(Token::Word(s));
+                    } else {
+                        self.section = Section::Final;
+                        break self
+                            .line
+                            .newline
+                            .then_some(Token::Newline(self.toppings.newline));
+                    }
+                }
+
+                Section::Newline => {
+                    self.section = Section::Indent;
+                    self.width = 0;
+                    break Some(Token::Newline(self.toppings.newline));
+                }
+
+                Section::Final => {
+                    break None;
+                }
+            }
+        }
+        .inspect(|token| self.width += self.token_width(token))
+    }
+}
+
+impl<'t> LineWrap<'t> {
+    fn token_width(&self, token: &Token<'t>) -> usize {
+        match token {
+            Token::Space => 1,
+            Token::Tab => self.toppings.tabs,
+            Token::Newline(_) => 0,
+            Token::Word(s) => s.width_cjk(),
+        }
+    }
 }
 
 pub(super) struct Wrap<'t, I> {
     source: I,
-    state: Option<State<'t>>,
     toppings: Toppings,
+    inner: Option<LineWrap<'t>>,
 }
 
 pub(super) fn iter<'t, I>(source: I, toppings: Toppings) -> Wrap<'t, I> {
     Wrap {
         source,
         toppings,
-        state: None,
+        inner: None,
     }
 }
 
@@ -40,148 +158,17 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match self.state.take() {
-                None => {
-                    self.state = Some(State {
-                        line: self.source.next()?,
-                        width: 0,
-                        section: Section::Indent(0),
-                    })
-                }
+            let inner = match &mut self.inner {
+                Some(inner) => inner,
+                None => self
+                    .inner
+                    .insert(LineWrap::new(self.source.next()?, self.toppings.clone())),
+            };
 
-                Some(State {
-                    line,
-                    width,
-                    section,
-                }) => match section {
-                    Section::Indent(idx) => {
-                        if idx < line.indent.1 {
-                            let token = line.indent.0;
-                            self.state = Some(State {
-                                line,
-                                width: width + self.token_width(token),
-                                section: Section::Indent(idx + 1),
-                            });
-                            return Some(token);
-                        } else {
-                            self.state = Some(State {
-                                line,
-                                width,
-                                section: Section::Comment,
-                            });
-                        }
-                    }
-
-                    Section::Comment => {
-                        if let Some(token) = line.comment {
-                            self.state = Some(State {
-                                line,
-                                width: self.token_width(token),
-                                section: Section::Padding(0),
-                            });
-                            return Some(token);
-                        } else {
-                            self.state = Some(State {
-                                line,
-                                width,
-                                section: Section::Padding(0),
-                            });
-                        }
-                    }
-
-                    Section::Padding(idx) => {
-                        if idx < line.padding.1 {
-                            let token = line.padding.0;
-                            self.state = Some(State {
-                                line,
-                                width: width + self.token_width(token),
-                                section: Section::Padding(idx + 1),
-                            });
-                            return Some(token);
-                        } else {
-                            self.state = Some(State {
-                                line,
-                                width,
-                                section: Section::Bullet,
-                            });
-                        }
-                    }
-
-                    Section::Bullet => {
-                        if let Some(token) = line.bullet {
-                            let section = if line.words.is_empty() {
-                                Section::Final
-                            } else {
-                                Section::Space(0)
-                            };
-                            self.state = Some(State {
-                                line,
-                                width: width + self.token_width(token),
-                                section,
-                            });
-                            return Some(token);
-                        } else {
-                            self.state = Some(State {
-                                line,
-                                width,
-                                section: Section::Words(0),
-                            });
-                        }
-                    }
-
-                    Section::Space(idx) => {
-                        self.state = Some(State {
-                            line,
-                            width: width + 1,
-                            section: Section::Words(idx),
-                        });
-                        return Some(Token::Space);
-                    }
-
-                    Section::Words(idx) => {
-                        if let Some(word) = line.words.get(idx) {
-                            let token = Token::Word(*word);
-                            let section = if line.words.len() == idx + 1 {
-                                Section::Final
-                            } else {
-                                Section::Space(idx + 1)
-                            };
-                            self.state = Some(State {
-                                line,
-                                width: width + self.token_width(token),
-                                section,
-                            });
-                            return Some(token);
-                        } else {
-                            self.state = Some(State {
-                                line,
-                                width,
-                                section: Section::Final,
-                            });
-                        }
-                    }
-
-                    Section::Final => {
-                        self.state = None;
-                        if line.newline {
-                            return Some(Token::Newline(self.toppings.newline));
-                        }
-                    }
-                },
+            match inner.next() {
+                Some(token) => return Some(token),
+                None => self.inner = None,
             }
-        }
-    }
-}
-
-impl<'t, I> Wrap<'t, I>
-where
-    I: Iterator<Item = Line<'t>>,
-{
-    fn token_width(&self, token: Token<'t>) -> usize {
-        match token {
-            Token::Space | Token::Newline(_) => 1,
-            Token::Tab => self.toppings.tabs,
-            Token::Word(s) => s.width_cjk(),
         }
     }
 }
