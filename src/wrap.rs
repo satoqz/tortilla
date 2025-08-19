@@ -1,144 +1,199 @@
 use unicode_width::UnicodeWidthStr;
 
-use super::{Line, Token, Toppings};
+use super::{Line, Newline, Token, Toppings};
 
-#[derive(Debug)]
-enum Section {
-    Indent,
-    Comment,
-    Padding,
-    Bullet,
-    Words,
-    Space,
-    Newline,
-    Final,
+enum Fit {
+    First,
+    This,
+    Next,
 }
 
-struct LineWrap<'t> {
-    line: Line<'t>,
-    toppings: Toppings,
-    section: Section,
+trait Strategy {
+    fn fit(&mut self, width: usize) -> Fit;
+}
+
+struct NaiveStrategy {
+    max: usize,
     width: usize,
-    word: usize,
-    first_word: bool,
 }
 
-impl<'t> LineWrap<'t> {
-    fn new(line: Line<'t>, toppings: Toppings) -> Self {
-        Self {
-            line,
-            toppings,
-            section: Section::Indent,
-            width: 0,
-            word: 0,
+impl NaiveStrategy {
+    fn new(max: usize) -> Self {
+        Self { max, width: 0 }
+    }
+}
 
-            // TODO: This should be a distinct state instead.
-            first_word: true,
+impl Strategy for NaiveStrategy {
+    fn fit(&mut self, width: usize) -> Fit {
+        if self.width == 0 {
+            self.width = width;
+            Fit::First
+        } else if self.width + width + 1 <= self.max {
+            self.width += width + 1;
+            Fit::This
+        } else {
+            self.width = width;
+            Fit::Next
         }
     }
 }
 
-impl<'t, 'idk> Iterator for LineWrap<'t> {
+#[derive(Debug)]
+enum State {
+    Indent,
+    Comment,
+    Padding,
+    Bullet,
+    BulletSpace,
+    Words,
+    WordSpace,
+    Final,
+}
+
+struct LineWrap<'t, S: Strategy> {
+    line: Line<'t>,
+    strategy: S,
+    state: State,
+    newline: Newline,
+    pending: Option<&'t str>,
+    word_idx: usize,
+    whitespace_idx: usize,
+    bullet_width: usize,
+}
+
+impl<'t> LineWrap<'t, NaiveStrategy> {
+    fn new(line: Line<'t>, toppings: &Toppings) -> Self {
+        let width = |token| match token {
+            Token::Space => 1,
+            Token::Tab => toppings.tabs,
+            Token::Newline(_) => 0,
+            Token::Word(s) => s.width_cjk(),
+        };
+
+        let bullet_width = line.bullet.map(width).unwrap_or(0);
+
+        let unbreakable_width = width(line.indent.0) * line.indent.1
+            + line.comment.map(width).unwrap_or(0)
+            + width(line.padding.0) * line.padding.1
+            + bullet_width;
+
+        let breakable_width = toppings.width.saturating_sub(unbreakable_width);
+
+        Self {
+            line,
+            strategy: NaiveStrategy::new(breakable_width),
+            newline: toppings.newline,
+            state: State::Indent,
+            pending: None,
+            word_idx: 0,
+            whitespace_idx: 0,
+            bullet_width,
+        }
+    }
+}
+
+impl<'t, S: Strategy> Iterator for LineWrap<'t, S> {
     type Item = Token<'t>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match self.section {
-                Section::Indent if self.line.indent.1 == 0 => {
-                    self.section = Section::Comment;
+            match self.state {
+                State::Indent if self.whitespace_idx == self.line.indent.1 => {
+                    self.whitespace_idx = 0;
+                    self.state = State::Comment;
                 }
 
-                Section::Indent => {
-                    self.line.indent.1 -= 1;
+                State::Indent => {
+                    self.whitespace_idx += 1;
                     break Some(self.line.indent.0);
                 }
 
-                Section::Comment => {
-                    self.section = Section::Padding;
+                State::Comment => {
+                    self.state = State::Padding;
                     if let Some(token) = self.line.comment {
                         break Some(token);
                     }
                 }
 
-                Section::Padding if self.line.padding.1 == 0 => {
-                    self.section = Section::Bullet;
+                State::Padding if self.whitespace_idx == self.line.padding.1 => {
+                    self.whitespace_idx = 0;
+                    self.state = State::Bullet;
                 }
 
-                Section::Padding => {
-                    self.line.padding.1 -= 1;
+                State::Padding => {
+                    self.whitespace_idx += 1;
                     break Some(self.line.padding.0);
                 }
 
-                Section::Bullet => {
-                    if let Some(token) = self.line.bullet {
-                        self.section = Section::Space;
-                        break Some(token);
-                    } else {
-                        self.section = Section::Words;
+                State::Bullet => {
+                    let token = match self.line.bullet {
+                        Some(token) => token,
+                        None => {
+                            self.state = State::Words;
+                            continue;
+                        }
+                    };
+
+                    if self.pending.is_some() {
+                        self.state = State::BulletSpace;
+                        continue;
                     }
+
+                    self.state = State::WordSpace;
+                    break Some(token);
                 }
 
-                Section::Space => {
-                    self.section = Section::Words;
+                State::BulletSpace if self.whitespace_idx == self.bullet_width => {
+                    self.whitespace_idx = 0;
+                    self.state = State::WordSpace;
+                }
+
+                State::BulletSpace => {
+                    self.whitespace_idx += 1;
                     break Some(Token::Space);
                 }
 
-                Section::Words => {
-                    if let Some(s) = self.line.words.get(self.word) {
-                        let next_width = self.width + s.width_cjk();
+                State::WordSpace => {
+                    self.state = State::Words;
+                    break Some(Token::Space);
+                }
 
-                        if next_width > self.toppings.width && !self.first_word {
-                            self.section = Section::Newline;
-                            continue;
+                State::Words => {
+                    if let Some(s) = self.pending.take() {
+                        break Some(Token::Word(s));
+                    }
+
+                    let s = match self.line.words.get(self.word_idx) {
+                        Some(s) => s,
+                        None => {
+                            self.state = State::Final;
+                            break self.line.newline.then_some(Token::Newline(self.newline));
                         }
+                    };
 
-                        self.first_word = false;
-                        self.word += 1;
+                    self.word_idx += 1;
 
-                        if self.word == self.line.words.len() {
-                            self.section = Section::Words;
+                    match self.strategy.fit(s.width_cjk()) {
+                        Fit::First => {
                             break Some(Token::Word(s));
                         }
-
-                        if next_width + 1 > self.toppings.width {
-                            self.section = Section::Newline;
-                        } else {
-                            self.section = Section::Space;
+                        Fit::This => {
+                            self.state = State::Words;
+                            self.pending = Some(s);
+                            break Some(Token::Space);
                         }
-
-                        break Some(Token::Word(s));
-                    } else {
-                        self.section = Section::Final;
-                        break self
-                            .line
-                            .newline
-                            .then_some(Token::Newline(self.toppings.newline));
+                        Fit::Next => {
+                            self.state = State::Indent;
+                            self.pending = Some(s);
+                            break Some(Token::Newline(self.newline));
+                        }
                     }
                 }
 
-                Section::Newline => {
-                    self.section = Section::Indent;
-                    self.width = 0;
-                    self.first_word = true;
-                    break Some(Token::Newline(self.toppings.newline));
-                }
-
-                Section::Final => {
+                State::Final => {
                     break None;
                 }
             }
-        }
-        .inspect(|token| self.width += self.token_width(token))
-    }
-}
-
-impl<'t> LineWrap<'t> {
-    fn token_width(&self, token: &Token<'t>) -> usize {
-        match token {
-            Token::Space => 1,
-            Token::Tab => self.toppings.tabs,
-            Token::Newline(_) => 0,
-            Token::Word(s) => s.width_cjk(),
         }
     }
 }
@@ -146,10 +201,13 @@ impl<'t> LineWrap<'t> {
 pub(super) struct Wrap<'t, I> {
     source: I,
     toppings: Toppings,
-    inner: Option<LineWrap<'t>>,
+    inner: Option<LineWrap<'t, NaiveStrategy>>,
 }
 
-pub(super) fn iter<'t, I>(source: I, toppings: Toppings) -> Wrap<'t, I> {
+pub(super) fn iter<'t, I>(source: I, toppings: Toppings) -> Wrap<'t, I>
+where
+    I: Iterator<Item = Line<'t>>,
+{
     Wrap {
         source,
         toppings,
@@ -169,7 +227,7 @@ where
                 Some(inner) => inner,
                 None => self
                     .inner
-                    .insert(LineWrap::new(self.source.next()?, self.toppings.clone())),
+                    .insert(LineWrap::new(self.source.next()?, &self.toppings)),
             };
 
             match inner.next() {
