@@ -57,21 +57,6 @@ impl<'t> Token<'t> {
 #[derive(Debug, PartialEq)]
 struct Whitespace<'t>(Token<'t>, usize);
 
-#[cfg(test)]
-impl Whitespace<'static> {
-    fn zero() -> Self {
-        Self(Token::Space, 0)
-    }
-
-    fn spaces(count: usize) -> Self {
-        Self(Token::Space, count)
-    }
-
-    fn tabs(count: usize) -> Self {
-        Self(Token::Tab, count)
-    }
-}
-
 #[derive(Debug, PartialEq)]
 struct Line<'t> {
     indent: Whitespace<'t>,

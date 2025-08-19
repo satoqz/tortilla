@@ -103,53 +103,22 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::Token::{self, *};
-    use super::{Line, Whitespace};
+    use crate::{Line, Token, line, testing::LineExtension, tokens};
 
-    fn parse<'t>(tokens: &[Token<'t>]) -> Vec<Line<'t>> {
-        super::iter(tokens.iter().copied()).collect()
+    fn parse<'t>(tokens: Vec<Token<'t>>) -> Vec<Line<'t>> {
+        super::iter(tokens.into_iter()).collect()
     }
 
     #[test]
     fn idk() {
         assert_eq!(
-            parse(&[
-                Word("//"),
-                Space,
-                Word("1."),
-                Space,
-                Word("hi"),
-                Word("hello")
-            ]),
-            vec![Line {
-                indent: Whitespace::zero(),
-                comment: Some(Token::Word("//")),
-                padding: Whitespace::spaces(1),
-                bullet: Some(Token::Word("1.")),
-                words: vec!["hi", "hello"],
-                newline: false,
-            }]
+            parse(tokens!("//", s, "1.", s, "hi", "hello")),
+            vec![line!(s0, "//", s1, "1.", "hi", "hello").trimmed()],
         );
 
         assert_eq!(
-            parse(&[
-                Tab,
-                Tab,
-                Word("//"),
-                Space,
-                Word("1."),
-                Space,
-                Word("hi"),
-                Word("hello")
-            ]),
-            vec![Line {
-                indent: Whitespace::tabs(2),
-                comment: Some(Token::Word("//")),
-                padding: Whitespace::spaces(1),
-                bullet: Some(Token::Word("1.")),
-                words: vec!["hi", "hello"],
-                newline: false,
-            }]
+            parse(tokens!(t, t, "//", s, "1.", s, "hi", "hello")),
+            vec![line!(t2, "//", s1, "1.", "hi", "hello").trimmed()]
         );
     }
 }

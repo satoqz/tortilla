@@ -1,4 +1,15 @@
-use super::{Token, Whitespace};
+use super::{Line, Token, Whitespace};
+
+pub(super) trait LineExtension {
+    fn trimmed(self) -> Self;
+}
+
+impl LineExtension for Line<'_> {
+    fn trimmed(mut self) -> Self {
+        self.newline = false;
+        self
+    }
+}
 
 #[macro_export]
 macro_rules! token {
