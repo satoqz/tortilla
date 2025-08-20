@@ -11,7 +11,7 @@ use merge::Merge;
 use parse::Parse;
 use wrap::{Sauce, Wrap};
 
-pub use wrap::Naive;
+pub use wrap::{Guacamole, Salsa};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Newline {

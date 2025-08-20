@@ -13,12 +13,12 @@ pub trait Sauce {
     fn fit(&mut self, words: &[&str], idx: usize) -> Fit;
 }
 
-pub struct Naive {
+pub struct Guacamole {
     max: usize,
     width: usize,
 }
 
-impl Sauce for Naive {
+impl Sauce for Guacamole {
     fn new(_: &[&str], max: usize) -> Self {
         Self { max, width: 0 }
     }
@@ -35,6 +35,18 @@ impl Sauce for Naive {
 
         self.width = updated;
         fit
+    }
+}
+
+pub struct Salsa;
+
+impl Sauce for Salsa {
+    fn new(_: &[&str], _: usize) -> Self {
+        Self
+    }
+
+    fn fit(&mut self, _: &[&str], _: usize) -> Fit {
+        unimplemented!("salsa is still in preparation")
     }
 }
 
