@@ -1,10 +1,12 @@
+use std::collections::HashSet;
+
 use unicode_width::UnicodeWidthStr;
 
 use super::{Line, Newline, Token, Toppings};
 
 pub trait Sauce {
     fn prepare(words: &[&str], max: usize) -> Self;
-    fn fits(&mut self, words: &[&str], idx: usize) -> bool;
+    fn should_break(&mut self, words: &[&str], idx: usize) -> bool;
 }
 
 pub struct Guacamole {
@@ -17,7 +19,7 @@ impl Sauce for Guacamole {
         Self { max, width: 0 }
     }
 
-    fn fits(&mut self, words: &[&str], idx: usize) -> bool {
+    fn should_break(&mut self, words: &[&str], idx: usize) -> bool {
         let width = words[idx].width_cjk();
 
         // First word always fits, and doesn't produce an extra space.
@@ -26,29 +28,66 @@ impl Sauce for Guacamole {
             return true;
         }
 
-        let (updated, fits) = match self.width {
+        let (updated, should_break) = match self.width {
             // First word always fits, and doesn't produce an extra space.
-            0 => (width, true),
+            0 => (width, false),
             // Add to the current line, and add a space in front.
-            _ if self.width + width < self.max => (self.width + width + 1, true),
+            _ if self.width + width < self.max => (self.width + width + 1, false),
             // Start a new line first, again no need for a space.
-            _ => (width, false),
+            _ => (width, true),
         };
 
         self.width = updated;
-        fits
+        should_break
     }
 }
 
-pub struct Salsa;
+pub struct Salsa(HashSet<usize>);
 
 impl Sauce for Salsa {
-    fn prepare(_: &[&str], _: usize) -> Self {
-        Self
+    fn prepare(words: &[&str], max: usize) -> Self {
+        let mut offsets = vec![0; words.len() + 1];
+        for (idx, word) in words.iter().enumerate() {
+            offsets[idx + 1] = offsets[idx] + word.width_cjk();
+        }
+
+        let mut minimas = vec![(0, usize::MAX); offsets.len()];
+        minimas[0].1 = 0;
+
+        for start_node_idx in 0..words.len() {
+            for end_node_idx in (start_node_idx + 1)..offsets.len() {
+                let line_length = offsets[end_node_idx] - offsets[start_node_idx] + end_node_idx
+                    - start_node_idx
+                    - 1;
+
+                if line_length > max {
+                    break;
+                }
+
+                let penalty = if end_node_idx == words.len() {
+                    0
+                } else {
+                    (max - line_length).pow(2)
+                };
+
+                let cost = minimas[start_node_idx].1 + penalty;
+                if cost < minimas[end_node_idx].1 {
+                    minimas[end_node_idx] = (start_node_idx, cost);
+                }
+            }
+        }
+
+        Self(
+            std::iter::successors(Some(words.len()), |idx| {
+                (*idx != 0).then_some(minimas[*idx].0)
+            })
+            .skip(1)
+            .collect(),
+        )
     }
 
-    fn fits(&mut self, _: &[&str], _: usize) -> bool {
-        unimplemented!("salsa is still in preparation")
+    fn should_break(&mut self, _: &[&str], idx: usize) -> bool {
+        self.0.contains(&idx)
     }
 }
 
@@ -131,7 +170,7 @@ impl<'t, S: Sauce> Iterator for LineWrap<'t, S> {
                         }
                     };
 
-                    let fits = self.sauce.fits(&self.line.words, self.word_idx);
+                    let should_break = self.sauce.should_break(&self.line.words, self.word_idx);
                     self.word_idx += 1;
 
                     // Queue up this word:
@@ -144,14 +183,14 @@ impl<'t, S: Sauce> Iterator for LineWrap<'t, S> {
                         continue;
                     }
 
-                    break Some(if fits {
-                        // Word fits, but needs a space first.
-                        self.state = State::Words;
-                        Token::Space
-                    } else {
+                    break Some(if should_break {
                         // Word doesn't fit, start a new line.
                         self.state = State::Indent;
                         Token::Newline(self.newline)
+                    } else {
+                        // Word fits, but needs a space first.
+                        self.state = State::Words;
+                        Token::Space
                     });
                 }
 

@@ -11,7 +11,7 @@ enum Sauce {
 fn order() -> io::Result<(Sauce, Toppings)> {
     let mut args = std::env::args().skip(1);
 
-    let mut sauce = Sauce::Guacamole;
+    let mut sauce = Sauce::Salsa;
     let mut toppings = tortilla::Toppings::default();
 
     macro_rules! exit {
