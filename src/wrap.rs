@@ -55,7 +55,6 @@ impl Sauce for Salsa {
 #[derive(Debug)]
 enum State {
     Words,
-    WordSpace,
     Indent,
     Comment,
     Padding,
@@ -94,11 +93,17 @@ impl<'t, S: Sauce> LineWrap<'t, S> {
         let breakable_width = toppings.width.saturating_sub(unbreakable_width);
         let sauce = S::prepare(&line.words, breakable_width);
 
+        let state = if line.words.is_empty() {
+            State::Indent
+        } else {
+            State::Words
+        };
+
         Self {
             line,
             sauce,
+            state,
             newline: toppings.newline,
-            state: State::Words,
             pending: None,
             word_idx: 0,
             whitespace_idx: 0,
@@ -133,7 +138,7 @@ impl<'t, S: Sauce> Iterator for LineWrap<'t, S> {
                     self.pending = Some(s);
 
                     // First word special case: Start a new line, but don't
-                    // prepend a newline token, but skip right to the indent.
+                    // prepend a newline token, rather skip right to the indent.
                     if self.word_idx == 1 {
                         self.state = State::Indent;
                         continue;
@@ -148,11 +153,6 @@ impl<'t, S: Sauce> Iterator for LineWrap<'t, S> {
                         self.state = State::Indent;
                         Token::Newline(self.newline)
                     });
-                }
-
-                State::WordSpace => {
-                    self.state = State::Words;
-                    break Some(Token::Space);
                 }
 
                 State::Indent if self.whitespace_idx == self.line.indent.1 => {
@@ -191,18 +191,25 @@ impl<'t, S: Sauce> Iterator for LineWrap<'t, S> {
                         }
                     };
 
-                    if self.pending.is_some() {
-                        self.state = State::BulletSpace;
-                        continue;
+                    // No more words come after this bullet, don't insert space.
+                    if self.pending.is_none() {
+                        // Go back to words to finalize the line.
+                        self.state = State::Words;
+                        break Some(token);
                     }
 
-                    self.state = State::WordSpace;
-                    break Some(token);
+                    self.state = State::BulletSpace;
+
+                    if self.word_idx == 1 {
+                        // Only add a single space, after the bullet.
+                        self.whitespace_idx = self.bullet_width;
+                        break Some(token);
+                    }
                 }
 
-                State::BulletSpace if self.whitespace_idx == self.bullet_width => {
+                State::BulletSpace if self.whitespace_idx == self.bullet_width + 1 => {
                     self.whitespace_idx = 0;
-                    self.state = State::WordSpace;
+                    self.state = State::Words;
                 }
 
                 State::BulletSpace => {
