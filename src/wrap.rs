@@ -60,14 +60,13 @@ impl Sauce for Salsa {
                     - start_node_idx
                     - 1;
 
-                if line_length > max {
+                if line_length > max && end_node_idx != start_node_idx + 1 {
                     break;
                 }
 
-                let penalty = if end_node_idx == words.len() {
-                    0
-                } else {
-                    (max - line_length).pow(2)
+                let penalty = match end_node_idx != words.len() {
+                    true => max.saturating_sub(line_length).pow(2),
+                    false => 0,
                 };
 
                 let cost = minimas[start_node_idx].1 + penalty;
