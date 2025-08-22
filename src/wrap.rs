@@ -122,7 +122,7 @@ impl<'t, S: Sauce> LineWrap<'t, S> {
             Token::Word(s) => s.width_cjk(),
         };
 
-        let bullet_width = line.bullet.map(width).unwrap_or(0);
+        let bullet_width = line.bullet.map(|bullet| width(bullet) + 1).unwrap_or(0);
 
         let unbreakable_width = width(line.indent.0) * line.indent.1
             + line.comment.map(width).unwrap_or(0)
@@ -241,12 +241,12 @@ impl<'t, S: Sauce> Iterator for LineWrap<'t, S> {
 
                     if self.word_idx == 1 {
                         // Only add a single space, after the bullet.
-                        self.whitespace_idx = self.bullet_width;
+                        self.whitespace_idx = self.bullet_width.saturating_sub(1);
                         break Some(token);
                     }
                 }
 
-                State::BulletSpace if self.whitespace_idx == self.bullet_width + 1 => {
+                State::BulletSpace if self.whitespace_idx == self.bullet_width => {
                     self.whitespace_idx = 0;
                     self.state = State::Words;
                 }
