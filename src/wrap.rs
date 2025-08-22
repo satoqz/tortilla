@@ -2,15 +2,9 @@ use unicode_width::UnicodeWidthStr;
 
 use super::{Line, Newline, Token, Toppings};
 
-pub enum Fit {
-    First,
-    This,
-    Next,
-}
-
 pub trait Sauce {
-    fn new(words: &[&str], max: usize) -> Self;
-    fn fit(&mut self, words: &[&str], idx: usize) -> Fit;
+    fn prepare(words: &[&str], max: usize) -> Self;
+    fn fits(&mut self, words: &[&str], idx: usize) -> bool;
 }
 
 pub struct Guacamole {
@@ -19,46 +13,54 @@ pub struct Guacamole {
 }
 
 impl Sauce for Guacamole {
-    fn new(_: &[&str], max: usize) -> Self {
+    fn prepare(_: &[&str], max: usize) -> Self {
         Self { max, width: 0 }
     }
 
-    fn fit(&mut self, words: &[&str], idx: usize) -> Fit {
+    fn fits(&mut self, words: &[&str], idx: usize) -> bool {
         let width = words[idx].width_cjk();
 
-        let (updated, fit) = match self.width {
-            0 => (width, Fit::First),
-            // < and not <= to leave room for a space before the word.
-            _ if self.width + width < self.max => (self.width + width + 1, Fit::This),
-            _ => (width, Fit::Next),
+        // First word always fits, and doesn't produce an extra space.
+        if self.width == 0 {
+            self.width = width;
+            return true;
+        }
+
+        let (updated, fits) = match self.width {
+            // First word always fits, and doesn't produce an extra space.
+            0 => (width, true),
+            // Add to the current line, and add a space in front.
+            _ if self.width + width < self.max => (self.width + width + 1, true),
+            // Start a new line first, again no need for a space.
+            _ => (width, false),
         };
 
         self.width = updated;
-        fit
+        fits
     }
 }
 
 pub struct Salsa;
 
 impl Sauce for Salsa {
-    fn new(_: &[&str], _: usize) -> Self {
+    fn prepare(_: &[&str], _: usize) -> Self {
         Self
     }
 
-    fn fit(&mut self, _: &[&str], _: usize) -> Fit {
+    fn fits(&mut self, _: &[&str], _: usize) -> bool {
         unimplemented!("salsa is still in preparation")
     }
 }
 
 #[derive(Debug)]
 enum State {
+    Words,
+    WordSpace,
     Indent,
     Comment,
     Padding,
     Bullet,
     BulletSpace,
-    Words,
-    WordSpace,
     Final,
 }
 
@@ -90,13 +92,13 @@ impl<'t, S: Sauce> LineWrap<'t, S> {
             + bullet_width;
 
         let breakable_width = toppings.width.saturating_sub(unbreakable_width);
-        let strategy = S::new(&line.words, breakable_width);
+        let sauce = S::prepare(&line.words, breakable_width);
 
         Self {
             line,
-            sauce: strategy,
+            sauce,
             newline: toppings.newline,
-            state: State::Indent,
+            state: State::Words,
             pending: None,
             word_idx: 0,
             whitespace_idx: 0,
@@ -111,6 +113,48 @@ impl<'t, S: Sauce> Iterator for LineWrap<'t, S> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             match self.state {
+                State::Words => {
+                    if let Some(s) = self.pending.take() {
+                        break Some(Token::Word(s));
+                    }
+
+                    let s = match self.line.words.get(self.word_idx) {
+                        Some(s) => s,
+                        None => {
+                            self.state = State::Final;
+                            break self.line.newline.then_some(Token::Newline(self.newline));
+                        }
+                    };
+
+                    let fits = self.sauce.fits(&self.line.words, self.word_idx);
+                    self.word_idx += 1;
+
+                    // Queue up this word:
+                    self.pending = Some(s);
+
+                    // First word special case: Start a new line, but don't
+                    // prepend a newline token, but skip right to the indent.
+                    if self.word_idx == 1 {
+                        self.state = State::Indent;
+                        continue;
+                    }
+
+                    break Some(if fits {
+                        // Word fits, but needs a space first.
+                        self.state = State::Words;
+                        Token::Space
+                    } else {
+                        // Word doesn't fit, start a new line.
+                        self.state = State::Indent;
+                        Token::Newline(self.newline)
+                    });
+                }
+
+                State::WordSpace => {
+                    self.state = State::Words;
+                    break Some(Token::Space);
+                }
+
                 State::Indent if self.whitespace_idx == self.line.indent.1 => {
                     self.whitespace_idx = 0;
                     self.state = State::Comment;
@@ -164,42 +208,6 @@ impl<'t, S: Sauce> Iterator for LineWrap<'t, S> {
                 State::BulletSpace => {
                     self.whitespace_idx += 1;
                     break Some(Token::Space);
-                }
-
-                State::WordSpace => {
-                    self.state = State::Words;
-                    break Some(Token::Space);
-                }
-
-                State::Words => {
-                    if let Some(s) = self.pending.take() {
-                        break Some(Token::Word(s));
-                    }
-
-                    let s = match self.line.words.get(self.word_idx) {
-                        Some(s) => s,
-                        None => {
-                            self.state = State::Final;
-                            break self.line.newline.then_some(Token::Newline(self.newline));
-                        }
-                    };
-
-                    let token = match self.sauce.fit(&self.line.words, self.word_idx) {
-                        Fit::First => Token::Word(s),
-                        Fit::This => {
-                            self.state = State::Words;
-                            self.pending = Some(s);
-                            Token::Space
-                        }
-                        Fit::Next => {
-                            self.state = State::Indent;
-                            self.pending = Some(s);
-                            Token::Newline(self.newline)
-                        }
-                    };
-
-                    self.word_idx += 1;
-                    break Some(token);
                 }
 
                 State::Final => {
