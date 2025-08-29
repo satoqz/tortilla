@@ -69,9 +69,122 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::Line;
+    use crate::{Line, Whitespace::*, line};
 
     fn merge(lines: Vec<Line>) -> Vec<Line> {
         super::Merge::new(lines.into_iter()).collect()
+    }
+
+    #[test]
+    fn empty() {
+        assert_eq!(merge(vec![]), vec![]);
+    }
+
+    #[test]
+    fn single_line() {
+        assert_eq!(
+            merge(vec![line!(Space(2), None, Space(2), None, "hello")]),
+            vec![line!(Space(2), None, Space(2), None, "hello")]
+        );
+    }
+
+    #[test]
+    fn merge_two_lines_with_matching_indent_and_padding() {
+        assert_eq!(
+            merge(vec![
+                line!(Space(2), None, Space(2), None, "hello" ;),
+                line!(Space(2), None, Space(2), None, "world" ;),
+            ]),
+            vec![line!(Space(2), None, Space(2), None, "hello", "world" ;)]
+        );
+    }
+
+    #[test]
+    fn merge_two_lines_with_bullet() {
+        assert_eq!(
+            merge(vec![
+                line!(Space(2), None, Space(2), Some("-"), "hello" ;),
+                line!(Space(2), None, Space(4), None, "world"),
+            ]),
+            vec![line!(Space(2), None, Space(2), Some("-"), "hello", "world")]
+        );
+    }
+
+    #[test]
+    fn do_not_merge_different_comments() {
+        assert_eq!(
+            merge(vec![
+                line!(Space(2), Some("//"), Space(2), None, "hello" ;),
+                line!(Space(2), Some("#"), Space(2), None, "world"),
+            ]),
+            vec![
+                line!(Space(2), Some("//"), Space(2), None, "hello" ;),
+                line!(Space(2), Some("#"), Space(2), None, "world"),
+            ]
+        );
+    }
+
+    #[test]
+    fn do_not_merge_different_bullets() {
+        assert_eq!(
+            merge(vec![
+                line!(Space(2), None, Space(2), Some("-"), "hello" ;),
+                line!(Space(2), None, Space(2), Some("*"), "world"),
+            ]),
+            vec![
+                line!(Space(2), None, Space(2), Some("-"), "hello" ;),
+                line!(Space(2), None, Space(2), Some("*"), "world"),
+            ]
+        );
+    }
+
+    #[test]
+    fn do_not_merge_empty_lines() {
+        assert_eq!(
+            merge(vec![
+                line!(Space(2), None, Space(2), None, "hello" ;),
+                line!(Space(2), None, Space(2), None ;),
+                line!(Space(2), None, Space(2), None, "world" ;),
+            ]),
+            vec![
+                line!(Space(2), None, Space(2), None, "hello" ;),
+                line!(Space(2), None, Space(2), None ;),
+                line!(Space(2), None, Space(2), None, "world" ;),
+            ]
+        );
+    }
+
+    #[test]
+    fn do_not_merge_lines_with_new_bullet() {
+        assert_eq!(
+            merge(vec![
+                line!(Space(2), None, Space(2), Some("-"), "hello" ;),
+                line!(Space(2), None, Space(2), Some("-"), "world" ;),
+            ]),
+            vec![
+                line!(Space(2), None, Space(2), Some("-"), "hello" ;),
+                line!(Space(2), None, Space(2), Some("-"), "world" ;),
+            ]
+        );
+    }
+
+    #[test]
+    fn merge_multiple_lines() {
+        assert_eq!(
+            merge(vec![
+                line!(Space(2), None, Space(2), None, "hello" ;),
+                line!(Space(2), None, Space(2), None, "world" ;),
+                line!(Space(2), None, Space(2), None, "rust"),
+            ]),
+            vec![line!(
+                Space(2),
+                None,
+                Space(2),
+                None,
+                "hello",
+                "world",
+                "rust"
+            )]
+        );
     }
 }
