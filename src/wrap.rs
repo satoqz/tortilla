@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use unicode_width::UnicodeWidthStr;
 
-use super::{Line, Newline, Token, Toppings};
+use super::{Line, Newline, Toppings, Whitespace};
 
 /// A line breaking algorithm.
 pub trait Sauce {
@@ -126,7 +126,7 @@ enum State {
     Final,
 }
 
-struct LineWrap<'t, S: Sauce> {
+struct LineWrap<'t, S> {
     line: Line<'t>,
     sauce: S,
     state: State,
@@ -139,18 +139,19 @@ struct LineWrap<'t, S: Sauce> {
 
 impl<'t, S: Sauce> LineWrap<'t, S> {
     fn new(line: Line<'t>, toppings: &Toppings) -> Self {
-        let width = |token| match token {
-            Token::Space => 1,
-            Token::Tab => toppings.tabs,
-            Token::Newline(_) => 0,
-            Token::Word(s) => s.width_cjk(),
+        let whitespace_width = |whitespace| match whitespace {
+            Whitespace::Space(count) => count,
+            Whitespace::Tab(count) => toppings.tabs * count,
         };
 
-        let bullet_width = line.bullet.map(|bullet| width(bullet) + 1).unwrap_or(0);
+        let bullet_width = line
+            .bullet
+            .map(|bullet| bullet.width_cjk() + 1)
+            .unwrap_or(0);
 
-        let unbreakable_width = width(line.indent.0) * line.indent.1
-            + line.comment.map(width).unwrap_or(0)
-            + width(line.padding.0) * line.padding.1
+        let unbreakable_width = whitespace_width(line.indent)
+            + line.comment.map(|comment| comment.width_cjk()).unwrap_or(0)
+            + whitespace_width(line.padding)
             + bullet_width;
 
         let breakable_width = toppings.width.saturating_sub(unbreakable_width);
@@ -176,21 +177,21 @@ impl<'t, S: Sauce> LineWrap<'t, S> {
 }
 
 impl<'t, S: Sauce> Iterator for LineWrap<'t, S> {
-    type Item = Token<'t>;
+    type Item = &'t str;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             match self.state {
                 State::Words => {
                     if let Some(s) = self.pending.take() {
-                        break Some(Token::Word(s));
+                        break Some(s);
                     }
 
                     let s = match self.line.words.get(self.word_idx) {
                         Some(s) => s,
                         None => {
                             self.state = State::Final;
-                            break self.line.newline.then_some(Token::Newline(self.newline));
+                            break self.line.newline.then_some(self.newline.as_str());
                         }
                     };
 
@@ -210,22 +211,22 @@ impl<'t, S: Sauce> Iterator for LineWrap<'t, S> {
                     break Some(if should_break {
                         // Word doesn't fit, start a new line.
                         self.state = State::Indent;
-                        Token::Newline(self.newline)
+                        self.newline.as_str()
                     } else {
                         // Word fits, but needs a space first.
                         self.state = State::Words;
-                        Token::Space
+                        " "
                     });
                 }
 
-                State::Indent if self.whitespace_idx == self.line.indent.1 => {
+                State::Indent if self.whitespace_idx == self.line.indent.count() => {
                     self.whitespace_idx = 0;
                     self.state = State::Comment;
                 }
 
                 State::Indent => {
                     self.whitespace_idx += 1;
-                    break Some(self.line.indent.0);
+                    break Some(self.line.indent.as_str());
                 }
 
                 State::Comment => {
@@ -235,14 +236,14 @@ impl<'t, S: Sauce> Iterator for LineWrap<'t, S> {
                     }
                 }
 
-                State::Padding if self.whitespace_idx == self.line.padding.1 => {
+                State::Padding if self.whitespace_idx == self.line.padding.count() => {
                     self.whitespace_idx = 0;
                     self.state = State::Bullet;
                 }
 
                 State::Padding => {
                     self.whitespace_idx += 1;
-                    break Some(self.line.padding.0);
+                    break Some(self.line.padding.as_str());
                 }
 
                 State::Bullet => {
@@ -277,7 +278,7 @@ impl<'t, S: Sauce> Iterator for LineWrap<'t, S> {
 
                 State::BulletSpace => {
                     self.whitespace_idx += 1;
-                    break Some(Token::Space);
+                    break Some(" ");
                 }
 
                 State::Final => {
@@ -288,17 +289,13 @@ impl<'t, S: Sauce> Iterator for LineWrap<'t, S> {
     }
 }
 
-pub(super) struct Wrap<'t, L, S: Sauce> {
+pub struct Wrap<'t, L, S: Sauce> {
     lines: L,
     toppings: Toppings,
     inner: Option<LineWrap<'t, S>>,
 }
 
-impl<'t, L, S> Wrap<'t, L, S>
-where
-    L: Iterator<Item = Line<'t>>,
-    S: Sauce,
-{
+impl<'t, L, S: Sauce> Wrap<'t, L, S> {
     pub fn new(lines: L, toppings: Toppings) -> Self {
         Self {
             lines,
@@ -313,7 +310,7 @@ where
     I: Iterator<Item = Line<'t>>,
     S: Sauce,
 {
-    type Item = Token<'t>;
+    type Item = &'t str;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -325,23 +322,9 @@ where
             };
 
             match inner.next() {
-                Some(token) => return Some(token),
+                Some(chunk) => return Some(chunk),
                 None => self.inner = None,
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::LineWrap;
-    use crate::{Guacamole, Line, Salsa, Token, Toppings};
-
-    fn guacamole(line: Line, toppings: Toppings) -> Vec<Token> {
-        LineWrap::<Guacamole>::new(line, &toppings).collect()
-    }
-
-    fn salsa(line: Line, toppings: Toppings) -> Vec<Token> {
-        LineWrap::<Salsa>::new(line, &toppings).collect()
     }
 }

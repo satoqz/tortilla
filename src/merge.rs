@@ -2,19 +2,13 @@ use std::iter::Peekable;
 
 use unicode_width::UnicodeWidthStr;
 
-use super::{Line, Token};
+use super::{Line, Whitespace};
 
-pub(super) struct Merge<'t, L>
-where
-    L: Iterator<Item = Line<'t>>,
-{
+pub(super) struct Merge<L: Iterator> {
     lines: Peekable<L>,
 }
 
-impl<'t, L> Merge<'t, L>
-where
-    L: Iterator<Item = Line<'t>>,
-{
+impl<L: Iterator> Merge<L> {
     pub fn new(lines: L) -> Self {
         Self {
             lines: lines.peekable(),
@@ -43,12 +37,12 @@ fn bullet_continuation(upper: &Line<'_>, lower: &Line<'_>) -> bool {
     };
 
     // +1 for space between bullet and word.
-    let bullet_width = bullet.as_str().width_cjk() + 1;
+    let bullet_width = bullet.width_cjk() + 1;
 
     // Bullets only work with space padding.
-    upper_whitespace.0 == Token::Space
-        && lower_whitespace.0 == Token::Space
-        && upper_whitespace.1 + bullet_width == lower_whitespace.1
+    matches!(upper_whitespace, Whitespace::Space(_))
+        && matches!(lower_whitespace, Whitespace::Space(_))
+        && upper_whitespace.count() + bullet_width == lower_whitespace.count()
 }
 
 fn merge<'t>(upper: &mut Line<'t>, mut lower: Line<'t>) {
@@ -56,7 +50,7 @@ fn merge<'t>(upper: &mut Line<'t>, mut lower: Line<'t>) {
     upper.newline &= lower.newline;
 }
 
-impl<'t, L> Iterator for Merge<'t, L>
+impl<'t, L> Iterator for Merge<L>
 where
     L: Iterator<Item = Line<'t>>,
 {

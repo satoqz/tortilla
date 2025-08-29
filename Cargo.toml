@@ -1,10 +1,10 @@
 [package]
 name = "tortilla"
 
-version = "0.0.1"
+version = "0.1.0"
 edition = "2024"
 
-description = "Text wrapping utility with support for indentation and comments"
+description = "Somewhat syntax-aware text wrapping for source code and plain text documents"
 keywords = ["textwrap", "hardwrap", "rewrap"]
 categories = ["command-line-utilities", "text-processing"]
 

@@ -9,9 +9,9 @@ mod testing;
 use lex::Lex;
 use merge::Merge;
 use parse::Parse;
-use wrap::{Sauce, Wrap};
+use wrap::Sauce;
 
-pub use wrap::{Guacamole, Salsa};
+pub use wrap::{Guacamole, Salsa, Wrap};
 
 /// Newline characters.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -51,26 +51,37 @@ enum Token<'t> {
     Word(&'t str),
 }
 
-impl<'t> Token<'t> {
-    fn as_str(&self) -> &'t str {
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Whitespace {
+    /// A space character (' ') repeated n times.
+    Space(usize),
+    /// A tab character (`\t`) repeated n times.
+    Tab(usize),
+}
+
+impl Whitespace {
+    /// Repetition count of the whitespace.
+    fn count(&self) -> usize {
         match self {
-            Self::Space => " ",
-            Self::Tab => "\t",
-            Self::Word(s) => s,
-            Self::Newline(newline) => newline.as_str(),
+            Self::Space(c) | Self::Tab(c) => *c,
+        }
+    }
+
+    /// String representation of the whitespace character, repeated only once.
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Space(_) => " ",
+            Self::Tab(_) => "\t",
         }
     }
 }
 
 #[derive(Debug, PartialEq)]
-struct Whitespace<'t>(Token<'t>, usize);
-
-#[derive(Debug, PartialEq)]
 struct Line<'t> {
-    indent: Whitespace<'t>,
-    comment: Option<Token<'t>>,
-    padding: Whitespace<'t>,
-    bullet: Option<Token<'t>>,
+    indent: Whitespace,
+    comment: Option<&'t str>,
+    padding: Whitespace,
+    bullet: Option<&'t str>,
     words: Vec<&'t str>,
     newline: bool,
 }
@@ -148,18 +159,30 @@ impl Toppings {
 /// ```
 /// use tortilla::{wrap, Salsa, Toppings};
 ///
+/// // Leading indent of two spaces, comment token and bullet point:
 /// let input = "
-/// - foo bar baz
+///   // - foo bar baz
 /// ";
 ///
+/// // Set a low width that will force wrapping across several lines:
 /// let toppings = Toppings::default().width(8);
 /// let output = wrap::<Salsa>(input, toppings).collect::<String>();
 ///
+/// // Indent and comment token are replicated onto new lines, bullet point
+/// // remains only on the first line and is replaced by spacing on the
+/// // subsequent ones:
 /// assert_eq!(output, "
-/// - foo
-///   bar
-///   baz
+///   // - foo
+///   //   bar
+///   //   baz
 /// ");
+///
+/// // Now set a much higher width, which will get us back to the original input
+/// // (a single line):
+/// let toppings = Toppings::default().width(100);
+/// let output = wrap::<Salsa>(&output, toppings).collect::<String>();
+///
+/// assert_eq!(output, input);
 /// ```
 ///
 /// Stream output to stdout:
@@ -180,5 +203,5 @@ impl Toppings {
 ///
 pub fn wrap<S: Sauce>(input: &str, toppings: Toppings) -> impl Iterator<Item = &str> {
     let lines = Parse::new(Lex::new(input));
-    Wrap::<Merge<Parse<Lex>>, S>::new(Merge::new(lines), toppings).map(|token| token.as_str())
+    Wrap::<Merge<Parse<Lex>>, S>::new(Merge::new(lines), toppings)
 }

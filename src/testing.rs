@@ -5,9 +5,11 @@ pub trait LineExtension {
 }
 
 impl LineExtension for Line<'_> {
-    fn trimmed(mut self) -> Self {
-        self.newline = false;
-        self
+    fn trimmed(self) -> Self {
+        Self {
+            newline: false,
+            ..self
+        }
     }
 }
 
@@ -38,16 +40,14 @@ macro_rules! tokens {
 
 }
 
-pub fn whitespace_notation(pattern: &str) -> Whitespace<'static> {
-    let token = match pattern.chars().next() {
-        Some('s') => Token::Space,
-        Some('t') => Token::Tab,
+pub fn whitespace_notation(pattern: &str) -> Whitespace {
+    let count = pattern[1..].parse().expect("invalid whitespace pattern");
+
+    match pattern.chars().next() {
+        Some('s') => Whitespace::Space(count),
+        Some('t') => Whitespace::Tab(count),
         _ => panic!("invalid whitespace pattern"),
-    };
-
-    let size = pattern[1..].parse().expect("invalid whitespace pattern");
-
-    Whitespace(token, size)
+    }
 }
 
 #[macro_export]
