@@ -4,15 +4,34 @@ use unicode_width::UnicodeWidthStr;
 
 use super::{Line, Newline, Token, Toppings};
 
+/// A line breaking algorithm.
 pub trait Sauce {
     fn prepare(words: &[&str], max: usize) -> Self;
     fn should_break(&mut self, words: &[&str], idx: usize) -> bool;
 }
 
+/// Naive "first-fit" line breaking algorithm.
+///
+/// Doesn't produce optimal results, but time complexity is O(n) and space
+/// complexity is O(1).
+///
+/// Also see: <https://en.wikipedia.org/wiki/Wrapping_(text)#Minimum_number_of_lines>
 pub struct Guacamole {
     max: usize,
     width: usize,
 }
+
+/// More sophisticated "optimal-fit" line breaking algorithm.
+///
+/// Time complexity is O(n^2), space complexity is O(n). This is fast enough
+/// for inputs of common size (i.e., reasonably sized paragraphs in a plain text
+/// document or code file). This is the default algorithm used by the tortilla
+/// CLI.
+///
+/// Also see:
+/// - <https://en.wikipedia.org/wiki/Wrapping_(text)#Minimum_raggedness>
+/// - <https://en.wikipedia.org/wiki/Knuth%E2%80%93Plass_line-breaking_algorithm>
+pub struct Salsa(HashSet<usize>);
 
 impl Sauce for Guacamole {
     fn prepare(_: &[&str], max: usize) -> Self {
@@ -42,10 +61,16 @@ impl Sauce for Guacamole {
     }
 }
 
-pub struct Salsa(HashSet<usize>);
-
 impl Sauce for Salsa {
     fn prepare(words: &[&str], max: usize) -> Self {
+        // This is shamelessly ported from:
+        // https://gist.github.com/dieter-medium/ad9f47a4e7e8ef4127461771a421e614#file-shortest_path_breaks-rb
+
+        // TODO: Maybe bother with:
+        // https://www.sciencedirect.com/science/article/pii/S0166218X98000213,
+        // but probably not. O(n^2) is good enough for me since I don't plan to
+        // wrap megabytes of single-paragraph text... I think?
+
         let mut offsets = vec![0; words.len() + 1];
         for (idx, word) in words.iter().enumerate() {
             offsets[idx + 1] = offsets[idx] + word.width_cjk();
@@ -304,5 +329,19 @@ where
                 None => self.inner = None,
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LineWrap;
+    use crate::{Guacamole, Line, Salsa, Token, Toppings};
+
+    fn guacamole(line: Line, toppings: Toppings) -> Vec<Token> {
+        LineWrap::<Guacamole>::new(line, &toppings).collect()
+    }
+
+    fn salsa(line: Line, toppings: Toppings) -> Vec<Token> {
+        LineWrap::<Salsa>::new(line, &toppings).collect()
     }
 }

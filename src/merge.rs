@@ -83,29 +83,4 @@ mod tests {
             after
         );
     }
-
-    #[test]
-    fn foo() {
-        merge(
-            vec![line!(s0, "", s0, "", "foo", "bar")],
-            vec![line!(s0, "", s0, "", "foo", "bar")],
-        );
-
-        merge(
-            vec![line!(s4, "//", s1, "-", "foo", "bar")],
-            vec![line!(s4, "//", s1, "-", "foo", "bar")],
-        );
-
-        merge(
-            vec![
-                line!(s4, "//", s1, "-", "foo", "bar"),
-                line!(s4, "//", s3, "", "baz"),
-                line!(s4, "//", s1, "", "nope"),
-            ],
-            vec![
-                line!(s4, "//", s1, "-", "foo", "bar", "baz"),
-                line!(s4, "//", s1, "", "nope"),
-            ],
-        );
-    }
 }

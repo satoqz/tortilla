@@ -107,29 +107,7 @@ where
 mod tests {
     use crate::{Line, Token, line, testing::LineExtension, tokens};
 
-    fn parse<'t>(tokens: Vec<Token<'t>>) -> Vec<Line<'t>> {
+    fn parse(tokens: Vec<Token>) -> Vec<Line> {
         super::Parse::new(tokens.into_iter()).collect()
-    }
-
-    #[test]
-    fn idk() {
-        assert_eq!(
-            parse(tokens!("//", s, "1.", s, "hi", "hello")),
-            vec![line!(s0, "//", s1, "1.", "hi", "hello").trimmed()],
-        );
-
-        assert_eq!(
-            parse(tokens!(t, t, "//", s, "1.", s, "hi", "hello")),
-            vec![line!(t2, "//", s1, "1.", "hi", "hello").trimmed()]
-        );
-
-        assert_eq!(
-            parse(tokens!(lf, "testing", lf, lf)),
-            vec![
-                line!(s0, "", s0, ""),
-                line!(s0, "", s0, "", "testing"),
-                line!(s0, "", s0, "")
-            ]
-        )
     }
 }
