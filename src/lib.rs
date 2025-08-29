@@ -3,9 +3,6 @@ mod merge;
 mod parse;
 mod wrap;
 
-#[cfg(test)]
-mod testing;
-
 use lex::Lex;
 use merge::Merge;
 use parse::Parse;
@@ -76,7 +73,7 @@ impl Whitespace {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 struct Line<'t> {
     indent: Whitespace,
     comment: Option<&'t str>,
@@ -204,4 +201,65 @@ impl Toppings {
 pub fn wrap<S: Sauce>(input: &str, toppings: Toppings) -> impl Iterator<Item = &str> {
     let lines = Parse::new(Lex::new(input));
     Wrap::<Merge<Parse<Lex>>, S>::new(Merge::new(lines), toppings)
+}
+
+/// Utility macro to construct a [Token].
+#[cfg(test)]
+#[macro_export]
+macro_rules! token {
+    (s) => {
+        $crate::Token::Space
+    };
+    (t) => {
+        $crate::Token::Tab
+    };
+    (lf) => {
+        $crate::Token::Newline($crate::Newline::LF)
+    };
+    (crlf) => {
+        $crate::Token::Newline($crate::Newline::CRLF)
+    };
+    ($word:expr) => {
+        $crate::Token::Word($word)
+    };
+}
+
+/// Utility macro to construct a [Vec]<[Token]>.
+#[cfg(test)]
+#[macro_export]
+macro_rules! tokens {
+    ($($token:tt),*) => {
+        vec![$($crate::token!($token)),*]
+    };
+}
+
+/// Utility macro to construct a [Line].
+#[cfg(test)]
+#[macro_export]
+macro_rules! line {
+    (
+        $indent:expr, $comment:expr,
+        $padding:expr, $bullet:expr
+        $(, $($word:expr),*)?
+    ) => {
+        $crate::Line {
+            indent: $indent, comment: $comment,
+            padding: $padding, bullet: $bullet,
+            words: vec![$($($word),*)?],
+            newline: false,
+        }
+    };
+
+    (
+        $indent:expr, $comment:expr,
+        $padding:expr, $bullet:expr
+        $(, $($word:expr),*)? ;
+    ) => {
+        $crate::Line {
+            indent: $indent, comment: $comment,
+            padding: $padding, bullet: $bullet,
+            words: vec![$($($word),*)?],
+            newline: true,
+        }
+    };
 }

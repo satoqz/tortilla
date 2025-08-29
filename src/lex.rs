@@ -74,9 +74,73 @@ impl<'t> Iterator for Lex<'t> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Token, tokens};
+    use crate::tokens;
 
-    fn lex(input: &str) -> Vec<Token<'_>> {
+    fn lex(input: &str) -> Vec<crate::Token<'_>> {
         super::Lex::new(input).collect()
+    }
+
+    #[test]
+    fn empty() {
+        assert_eq!(lex(""), tokens!());
+    }
+
+    #[test]
+    fn single_space() {
+        assert_eq!(lex(" "), tokens!(s));
+    }
+
+    #[test]
+    fn single_tab() {
+        assert_eq!(lex("\t"), tokens!(t));
+    }
+
+    #[test]
+    fn mixed_whitespace() {
+        assert_eq!(lex("\t  \t "), tokens!(t, s, s, t, s));
+    }
+
+    #[test]
+    fn single_lf() {
+        assert_eq!(lex("\n"), tokens!(lf));
+    }
+
+    #[test]
+    fn single_crlf() {
+        assert_eq!(lex("\r\n"), tokens!(crlf));
+    }
+
+    #[test]
+    fn mixed_newlines() {
+        assert_eq!(lex("\r\n\n\n\r\n"), tokens!(crlf, lf, lf, crlf),);
+    }
+
+    #[test]
+    fn one_letter_word() {
+        assert_eq!(lex("a"), tokens!("a"));
+    }
+
+    #[test]
+    fn multi_letter_word() {
+        assert_eq!(lex("foobar"), tokens!("foobar"));
+    }
+
+    #[test]
+    fn full_sentence() {
+        assert_eq!(
+            lex("Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo."),
+            tokens!(
+                "Buffalo", s, "buffalo", s, "Buffalo", s, "buffalo", s, "buffalo", s, "buffalo", s,
+                "Buffalo", s, "buffalo."
+            )
+        );
+    }
+
+    #[test]
+    fn mixed_paragraphs() {
+        assert_eq!(
+            lex("\t\tfoo  bar \nbaz\r\n"),
+            tokens!(t, t, "foo", s, s, "bar", s, lf, "baz", crlf)
+        );
     }
 }

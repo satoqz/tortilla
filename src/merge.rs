@@ -69,12 +69,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::{Line, line};
+    use crate::Line;
 
-    fn merge<'t>(before: Vec<Line<'t>>, after: Vec<Line<'t>>) {
-        assert_eq!(
-            super::Merge::new(before.into_iter()).collect::<Vec<_>>(),
-            after
-        );
+    fn merge(lines: Vec<Line>) -> Vec<Line> {
+        super::Merge::new(lines.into_iter()).collect()
     }
 }
