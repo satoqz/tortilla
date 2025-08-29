@@ -16,14 +16,14 @@ pub use wrap::{Guacamole, Salsa};
 /// Newline characters.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Newline {
-    /// A line feed ('\n').
+    /// A line feed (`\n`).
     LF,
-    /// A carriage return + line feed ('\r\n').
+    /// A carriage return + line feed (`\r\n`).
     CRLF,
 }
 
 impl Default for Newline {
-    /// The default newline character ('\n').
+    /// The default newline character (`\n`).
     fn default() -> Self {
         Self::LF
     }
@@ -43,7 +43,7 @@ impl Newline {
 enum Token<'t> {
     /// A space character (' ').
     Space,
-    /// A tab character ('\t').
+    /// A tab character (`\t`).
     Tab,
     /// A newline character, see [Newline].
     Newline(Newline),
@@ -84,7 +84,7 @@ pub struct Toppings {
 }
 
 impl Default for Toppings {
-    /// Default configuration with maximum width 80, tab width 4 and LF
+    /// Default configuration with maximum width 80, tab width 4 and LF (`\n`)
     /// newlines.
     fn default() -> Self {
         Self {
@@ -111,7 +111,7 @@ impl Toppings {
         Self { width, ..self }
     }
 
-    /// How much a tab character ('\t') contributes to line width calculation.
+    /// How much a tab character (`\t`) contributes to line width calculation.
     /// The default value is 4.
     ///
     /// While a tab character has a width of 1 as per the Unicode standard
@@ -125,7 +125,7 @@ impl Toppings {
     }
 
     /// The newline character to use, see [Newline]. This is a line feed
-    /// character ('\n', [Newline::LF]) by default.
+    /// character (`\n`, [Newline::LF]) by default.
     ///
     /// tortilla does not perform any heuristical newline character detection
     /// and always outputs uniform linebreaks. You may choose to perform such
