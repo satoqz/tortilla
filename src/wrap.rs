@@ -290,11 +290,12 @@ impl<'t, S: Sauce> Iterator for LineWrap<'t, S> {
 #[cfg(test)]
 mod tests {
     use super::{Guacamole, Salsa};
-    use crate::{Line, Toppings, Whitespace::*, line};
+    use crate::{Line, Toppings, Whitespace::*};
 
-    fn t() -> Toppings {
-        Toppings::default()
-    }
+    use std::sync::LazyLock;
+
+    static MINI_LINE: LazyLock<Toppings> = LazyLock::new(|| Toppings::default().width(10));
+    static HUGE_LINE: LazyLock<Toppings> = LazyLock::new(|| Toppings::default().width(1000));
 
     fn salsa<'t>(line: Line<'t>, toppings: &Toppings) -> Vec<&'t str> {
         super::LineWrap::<Salsa>::new(line, toppings).collect()
@@ -304,6 +305,8 @@ mod tests {
         super::LineWrap::<Guacamole>::new(line, toppings).collect()
     }
 
+    /// For tests where we expect [Salsa] and [Guacamole] to yield equal
+    /// results.
     #[track_caller]
     fn all<'t>(line: Line<'t>, toppings: &Toppings) -> Vec<&'t str> {
         let salsa = salsa(line.clone(), toppings);
@@ -312,11 +315,263 @@ mod tests {
         salsa
     }
 
-    #[test]
-    fn empty() {
-        assert_eq!(
-            all(line!(Space(0), None, Space(0), None), &t()),
-            Vec::<&str>::new(),
-        );
+    /// Tests for inputs that yield just a single line.
+    mod single_line {
+        use super::*;
+        use crate::{Newline, line};
+
+        #[test]
+        fn empty() {
+            assert_eq!(
+                all(line!(Space(0), None, Space(0), None), &HUGE_LINE),
+                Vec::<&str>::new()
+            );
+        }
+
+        #[test]
+        fn indent_space() {
+            assert_eq!(
+                all(line!(Space(4), None, Space(0), None), &HUGE_LINE),
+                vec![" ", " ", " ", " "]
+            );
+        }
+
+        #[test]
+        fn indent_tab() {
+            assert_eq!(
+                all(line!(Tab(2), None, Space(0), None), &HUGE_LINE),
+                vec!["\t", "\t"]
+            );
+        }
+
+        #[test]
+        fn comment() {
+            assert_eq!(
+                all(line!(Space(0), Some("//"), Space(0), None), &HUGE_LINE),
+                vec!["//"]
+            );
+        }
+
+        #[test]
+        fn padding_space() {
+            assert_eq!(
+                all(line!(Space(0), None, Space(4), None), &HUGE_LINE),
+                vec![" ", " ", " ", " "]
+            );
+        }
+
+        #[test]
+        fn padding_tab() {
+            assert_eq!(
+                all(line!(Space(0), None, Tab(2), None), &HUGE_LINE),
+                vec!["\t", "\t"]
+            );
+        }
+
+        #[test]
+        fn bullet() {
+            assert_eq!(
+                all(line!(Space(0), None, Space(0), Some("123.")), &HUGE_LINE),
+                vec!["123."]
+            );
+        }
+
+        #[test]
+        fn words() {
+            assert_eq!(
+                all(
+                    line!(Space(0), None, Space(0), None, "foo", "bar", "baz"),
+                    &HUGE_LINE
+                ),
+                vec!["foo", " ", "bar", " ", "baz"]
+            );
+        }
+
+        #[test]
+        fn final_newline_lf() {
+            assert_eq!(
+                all(line!(Space(0), None, Space(0), None ;), &HUGE_LINE),
+                vec!["\n"]
+            );
+        }
+
+        #[test]
+        fn final_newline_crlf() {
+            assert_eq!(
+                all(
+                    line!(Space(0), None, Space(0), None ;),
+                    &HUGE_LINE.clone().newline(Newline::CRLF)
+                ),
+                vec!["\r\n"]
+            );
+        }
+
+        #[test]
+        fn indent_and_padding() {
+            assert_eq!(
+                all(line!(Tab(2), None, Space(2), None), &HUGE_LINE),
+                vec!["\t", "\t", " ", " "]
+            );
+        }
+
+        #[test]
+        fn all_together() {
+            assert_eq!(
+                all(
+                    line!(Tab(2), Some("//"), Space(2), Some("-"), "foo", "bar", "baz" ;),
+                    &HUGE_LINE
+                ),
+                vec![
+                    "\t", "\t", "//", " ", " ", "-", " ", "foo", " ", "bar", " ", "baz", "\n"
+                ]
+            );
+        }
     }
+
+    /// Tests for inputs that should yield several lines.
+    mod multi_line {
+        use super::*;
+        use crate::line;
+
+        #[test]
+        fn words() {
+            assert_eq!(
+                all(
+                    line!(Space(0), None, Space(0), None, "foo", "bar", "baz"),
+                    &MINI_LINE
+                ),
+                vec!["foo", " ", "bar", "\n", "baz"]
+            );
+        }
+
+        #[test]
+        fn big_word() {
+            assert_eq!(
+                all(
+                    line!(Space(0), None, Space(0), None, "foo", "barbarbarbar", "baz"),
+                    &MINI_LINE
+                ),
+                vec!["foo", "\n", "barbarbarbar", "\n", "baz"]
+            );
+        }
+
+        #[test]
+        fn indent_space() {
+            assert_eq!(
+                all(
+                    line!(Space(2), None, Space(0), None, "foo", "bar", "baz" ;),
+                    &MINI_LINE.clone().tabs(1)
+                ),
+                vec![" ", " ", "foo", " ", "bar", "\n", " ", " ", "baz", "\n"]
+            );
+        }
+
+        #[test]
+        fn indent_low_tabs() {
+            assert_eq!(
+                all(
+                    line!(Tab(2), None, Space(0), None, "foo", "bar", "baz" ;),
+                    &MINI_LINE.clone().tabs(1)
+                ),
+                vec!["\t", "\t", "foo", " ", "bar", "\n", "\t", "\t", "baz", "\n"]
+            );
+        }
+
+        #[test]
+        fn indent_high_tabs() {
+            assert_eq!(
+                all(
+                    line!(Tab(2), None, Space(0), None, "foo", "bar", "baz"),
+                    &MINI_LINE.clone().tabs(8)
+                ),
+                vec![
+                    "\t", "\t", "foo", "\n", "\t", "\t", "bar", "\n", "\t", "\t", "baz"
+                ]
+            );
+        }
+
+        #[test]
+        fn comment() {
+            assert_eq!(
+                all(
+                    line!(Space(0), Some("//"), Space(1), None, "foo", "bar", "baz"),
+                    &MINI_LINE
+                ),
+                vec!["//", " ", "foo", " ", "bar", "\n", "//", " ", "baz"]
+            );
+        }
+
+        #[test]
+        fn bullet() {
+            assert_eq!(
+                all(
+                    line!(Space(0), None, Space(0), Some("1."), "foo", "bar", "baz"),
+                    &MINI_LINE
+                ),
+                vec!["1.", " ", "foo", " ", "bar", "\n", " ", " ", " ", "baz"]
+            );
+        }
+
+        #[test]
+        fn all_together() {
+            assert_eq!(
+                all(
+                    line!(Tab(2), Some("#"), Space(1), Some("-"), "foo", "bar", "baz" ;),
+                    &MINI_LINE
+                ),
+                vec![
+                    "\t", "\t", "#", " ", "-", " ", "foo", "\n", "\t", "\t", "#", " ", " ", " ",
+                    "bar", "\n", "\t", "\t", "#", " ", " ", " ", "baz", "\n"
+                ]
+            );
+        }
+    }
+
+    /// Tests to ensure sauces taste as expected.
+    mod sauce_probing {
+        use super::*;
+        use crate::line;
+
+        #[test]
+        fn guacamole_is_suboptimal() {
+            #[rustfmt::skip]
+            assert_eq!(
+                guacamole(
+                    line!(Space(0), None, Space(0), None,
+                        "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k",
+                        "l", "m", "n", "o", "p", "qqqqqqqqq" ;),
+                    &MINI_LINE
+                ),
+                vec![
+                    "a", " ", "b", " ", "c", " ", "d", " ", "e", "\n",
+                    "f", " ", "g", " ", "h", " ", "i", " ", "j", "\n",
+                    "k", " ", "l", " ", "m", " ", "n", " ", "o", "\n",
+                    "p", "\n",
+                    "qqqqqqqqq", "\n"
+                ],
+            );
+        }
+
+        #[test]
+        fn salsa_is_optimal() {
+            #[rustfmt::skip]
+            assert_eq!(
+                salsa(
+                    line!(Space(0), None, Space(0), None,
+                        "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k",
+                        "l", "m", "n", "o", "p", "qqqqqqqqq" ;),
+                    &MINI_LINE
+                ),
+                vec![
+                    "a", " ", "b", " ", "c", " ", "d", "\n",
+                    "e", " ", "f", " ", "g", " ", "h", "\n",
+                    "i", " ", "j", " ", "k", " ", "l", "\n",
+                    "m", " ", "n", " ", "o", " ", "p", "\n",
+                    "qqqqqqqqq", "\n"
+                ],
+            );
+        }
+    }
+
+    // ... we could do more here, but I'm good.
 }

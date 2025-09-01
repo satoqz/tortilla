@@ -212,7 +212,7 @@ mod tests {
     }
 
     #[test]
-    fn bullet() {
+    fn bullets() {
         assert_eq!(
             parse(tokens!["-"]),
             vec![line!(Space(0), None, Space(0), Some("-"))]
@@ -224,7 +224,7 @@ mod tests {
     }
 
     #[test]
-    fn indented_bullet() {
+    fn indented_bullets() {
         assert_eq!(
             parse(tokens![s, s, s, s, "-"]),
             vec![line!(Space(4), None, Space(0), Some("-"))]
