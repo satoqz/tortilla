@@ -70,6 +70,16 @@ For [Helix](https://helix-editor.com), I suggest the following:
 keys.normal."=" = ":pipe tortilla"
 ```
 
+### Rust crate
+
+Add the `tortilla` crate to your Rust project:
+
+```sh
+cargo add tortilla
+```
+
+See [docs.rs/tortilla](https://docs.rs/tortilla) for documentation.
+
 ### License
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT
