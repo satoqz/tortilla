@@ -131,26 +131,26 @@ mod tests {
 
     #[test]
     fn empty() {
-        assert_eq!(parse(tokens!()), vec![]);
+        assert_eq!(parse(tokens![]), vec![]);
     }
 
     #[test]
     fn single_space_indent() {
         assert_eq!(
-            parse(tokens!(s)),
+            parse(tokens![s]),
             vec![line!(Space(1), None, Space(0), None)]
         );
     }
 
     #[test]
     fn single_tab_indent() {
-        assert_eq!(parse(tokens!(t)), vec![line!(Tab(1), None, Space(0), None)]);
+        assert_eq!(parse(tokens![t]), vec![line!(Tab(1), None, Space(0), None)]);
     }
 
     #[test]
     fn multiple_spaces_indent() {
         assert_eq!(
-            parse(tokens!(s, s, s, s)),
+            parse(tokens![s, s, s, s]),
             vec![line!(Space(4), None, Space(0), None)]
         );
     }
@@ -158,7 +158,7 @@ mod tests {
     #[test]
     fn multiple_tabs_indent() {
         assert_eq!(
-            parse(tokens!(t, t)),
+            parse(tokens![t, t]),
             vec![line!(Tab(2), None, Space(0), None)]
         );
     }
@@ -166,7 +166,7 @@ mod tests {
     #[test]
     fn spaces_then_tabs() {
         assert_eq!(
-            parse(tokens!(s, s, s, t, t)),
+            parse(tokens![s, s, s, t, t]),
             vec![line!(Space(3), None, Tab(2), None)]
         );
     }
@@ -174,7 +174,7 @@ mod tests {
     #[test]
     fn tabs_then_spaces() {
         assert_eq!(
-            parse(tokens!(t, t, t, s, s)),
+            parse(tokens![t, t, t, s, s]),
             vec![line!(Tab(3), None, Space(2), None)]
         );
     }
@@ -182,11 +182,11 @@ mod tests {
     #[test]
     fn comment_only() {
         assert_eq!(
-            parse(tokens!("#")),
+            parse(tokens!["#"]),
             vec![line!(Space(0), Some("#"), Space(0), None)]
         );
         assert_eq!(
-            parse(tokens!("//")),
+            parse(tokens!["//"]),
             vec![line!(Space(0), Some("//"), Space(0), None)]
         );
     }
@@ -194,11 +194,11 @@ mod tests {
     #[test]
     fn indented_comment() {
         assert_eq!(
-            parse(tokens!(s, s, s, s, "#")),
+            parse(tokens![s, s, s, s, "#"]),
             vec![line!(Space(4), Some("#"), Space(0), None)]
         );
         assert_eq!(
-            parse(tokens!(t, "//")),
+            parse(tokens![t, "//"]),
             vec![line!(Tab(1), Some("//"), Space(0), None)]
         );
     }
@@ -206,7 +206,7 @@ mod tests {
     #[test]
     fn indented_comment_and_padding() {
         assert_eq!(
-            parse(tokens!(s, s, s, s, "#", t, s)),
+            parse(tokens![s, s, s, s, "#", t, s]),
             vec![line!(Space(4), Some("#"), Tab(1), None)]
         );
     }
@@ -214,11 +214,11 @@ mod tests {
     #[test]
     fn bullet() {
         assert_eq!(
-            parse(tokens!("-")),
+            parse(tokens!["-"]),
             vec![line!(Space(0), None, Space(0), Some("-"))]
         );
         assert_eq!(
-            parse(tokens!("123.")),
+            parse(tokens!["123."]),
             vec![line!(Space(0), None, Space(0), Some("123."))]
         );
     }
@@ -226,11 +226,11 @@ mod tests {
     #[test]
     fn indented_bullet() {
         assert_eq!(
-            parse(tokens!(s, s, s, s, "-")),
+            parse(tokens![s, s, s, s, "-"]),
             vec![line!(Space(4), None, Space(0), Some("-"))]
         );
         assert_eq!(
-            parse(tokens!(t, "123.")),
+            parse(tokens![t, "123."]),
             vec![line!(Tab(1), None, Space(0), Some("123."))]
         );
     }
@@ -238,7 +238,7 @@ mod tests {
     #[test]
     fn comment_and_bullet() {
         assert_eq!(
-            parse(tokens!(t, "//", s, "-")),
+            parse(tokens![t, "//", s, "-"]),
             vec![line!(Tab(1), Some("//"), Space(1), Some("-"))]
         );
     }
@@ -246,7 +246,7 @@ mod tests {
     #[test]
     fn words() {
         assert_eq!(
-            parse(tokens!("foo", s, s, "bar", t, "baz")),
+            parse(tokens!["foo", s, s, "bar", t, "baz"]),
             vec![line!(Space(0), None, Space(0), None, "foo", "bar", "baz")]
         );
     }
@@ -254,9 +254,9 @@ mod tests {
     #[test]
     fn all_together() {
         assert_eq!(
-            parse(tokens!(
+            parse(tokens![
                 t, t, "//", s, s, s, "-", s, s, "foo", s, s, "bar", t, "baz"
-            )),
+            ]),
             vec![line!(
                 Tab(2),
                 Some("//"),
@@ -272,7 +272,7 @@ mod tests {
     #[test]
     fn newlines() {
         assert_eq!(
-            parse(tokens!("foo", "bar", lf, crlf, "baz")),
+            parse(tokens!["foo", "bar", lf, crlf, "baz"]),
             vec![
                 line!(Space(0), None, Space(0), None, "foo", "bar" ;),
                 line!(Space(0), None, Space(0), None ;),

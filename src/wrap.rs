@@ -101,13 +101,11 @@ impl Sauce for Salsa {
             }
         }
 
-        Self(
-            std::iter::successors(Some(words.len()), |idx| {
-                (*idx != 0).then_some(minimas[*idx].0)
-            })
-            .skip(1)
-            .collect(),
-        )
+        let backtrack = std::iter::successors(Some(words.len()), |idx| {
+            (*idx != 0).then_some(minimas[*idx].0)
+        });
+
+        Self(backtrack.skip(1).collect())
     }
 
     fn should_break(&mut self, _: &[&str], idx: usize) -> bool {
@@ -126,7 +124,7 @@ enum State {
     Final,
 }
 
-struct LineWrap<'t, S> {
+pub(super) struct LineWrap<'t, S> {
     line: Line<'t>,
     sauce: S,
     state: State,
@@ -138,7 +136,7 @@ struct LineWrap<'t, S> {
 }
 
 impl<'t, S: Sauce> LineWrap<'t, S> {
-    fn new(line: Line<'t>, toppings: &Toppings) -> Self {
+    pub fn new(line: Line<'t>, toppings: &Toppings) -> Self {
         let whitespace_width = |whitespace| match whitespace {
             Whitespace::Space(count) => count,
             Whitespace::Tab(count) => toppings.tabs * count,
@@ -289,42 +287,36 @@ impl<'t, S: Sauce> Iterator for LineWrap<'t, S> {
     }
 }
 
-pub struct Wrap<'t, L, S: Sauce> {
-    lines: L,
-    toppings: Toppings,
-    inner: Option<LineWrap<'t, S>>,
-}
+#[cfg(test)]
+mod tests {
+    use super::{Guacamole, Salsa};
+    use crate::{Line, Toppings, Whitespace::*, line};
 
-impl<'t, L, S: Sauce> Wrap<'t, L, S> {
-    pub fn new(lines: L, toppings: Toppings) -> Self {
-        Self {
-            lines,
-            toppings,
-            inner: None,
-        }
+    fn t() -> Toppings {
+        Toppings::default()
     }
-}
 
-impl<'t, I, S> Iterator for Wrap<'t, I, S>
-where
-    I: Iterator<Item = Line<'t>>,
-    S: Sauce,
-{
-    type Item = &'t str;
+    fn salsa<'t>(line: Line<'t>, toppings: &Toppings) -> Vec<&'t str> {
+        super::LineWrap::<Salsa>::new(line, toppings).collect()
+    }
 
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let inner = match &mut self.inner {
-                Some(inner) => inner,
-                None => self
-                    .inner
-                    .insert(LineWrap::new(self.lines.next()?, &self.toppings)),
-            };
+    fn guacamole<'t>(line: Line<'t>, toppings: &Toppings) -> Vec<&'t str> {
+        super::LineWrap::<Guacamole>::new(line, toppings).collect()
+    }
 
-            match inner.next() {
-                Some(chunk) => return Some(chunk),
-                None => self.inner = None,
-            }
-        }
+    #[track_caller]
+    fn all<'t>(line: Line<'t>, toppings: &Toppings) -> Vec<&'t str> {
+        let salsa = salsa(line.clone(), toppings);
+        let guacamole = guacamole(line, toppings);
+        assert_eq!(salsa, guacamole);
+        salsa
+    }
+
+    #[test]
+    fn empty() {
+        assert_eq!(
+            all(line!(Space(0), None, Space(0), None), &t()),
+            Vec::<&str>::new(),
+        );
     }
 }

@@ -6,9 +6,9 @@ mod wrap;
 use lex::Lex;
 use merge::Merge;
 use parse::Parse;
-use wrap::Sauce;
+use wrap::{LineWrap, Sauce};
 
-pub use wrap::{Guacamole, Salsa, Wrap};
+pub use wrap::{Guacamole, Salsa};
 
 /// Newline characters.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -198,39 +198,57 @@ impl Toppings {
 /// }
 /// ```
 ///
-pub fn wrap<S: Sauce>(input: &str, toppings: Toppings) -> impl Iterator<Item = &str> {
-    let lines = Parse::new(Lex::new(input));
-    Wrap::<Merge<Parse<Lex>>, S>::new(Merge::new(lines), toppings)
+pub fn wrap<S: Sauce>(input: &str, toppings: Toppings) -> Wrap<'_, S> {
+    Wrap {
+        toppings,
+        lines: Merge::new(Parse::new(Lex::new(input))),
+        current: None,
+    }
+}
+
+/// An [Iterator] over chunks of wrapped output.
+pub struct Wrap<'t, S> {
+    toppings: Toppings,
+    lines: Merge<Parse<Lex<'t>>>,
+    current: Option<LineWrap<'t, S>>,
+}
+
+impl<'t, S: Sauce> Iterator for Wrap<'t, S> {
+    type Item = &'t str;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let inner = match &mut self.current {
+                Some(inner) => inner,
+                None => self
+                    .current
+                    .insert(LineWrap::new(self.lines.next()?, &self.toppings)),
+            };
+
+            match inner.next() {
+                Some(chunk) => return Some(chunk),
+                None => self.current = None,
+            }
+        }
+    }
 }
 
 /// Utility macro to construct a [Token].
 #[cfg(test)]
 #[macro_export]
 macro_rules! token {
-    (s) => {
-        $crate::Token::Space
-    };
-    (t) => {
-        $crate::Token::Tab
-    };
-    (lf) => {
-        $crate::Token::Newline($crate::Newline::LF)
-    };
-    (crlf) => {
-        $crate::Token::Newline($crate::Newline::CRLF)
-    };
-    ($word:expr) => {
-        $crate::Token::Word($word)
-    };
+    { s } => { $crate::Token::Space };
+    { t } => { $crate::Token::Tab };
+    { lf } => { $crate::Token::Newline($crate::Newline::LF) };
+    { crlf } => { $crate::Token::Newline($crate::Newline::CRLF) };
+    { $word:expr } => { $crate::Token::Word($word) };
 }
 
 /// Utility macro to construct a [Vec]<[Token]>.
 #[cfg(test)]
 #[macro_export]
 macro_rules! tokens {
-    ($($token:tt),*) => {
-        vec![$($crate::token!($token)),*]
-    };
+    [$($token:tt),*] => { vec![$($crate::token!{ $token }),*] };
 }
 
 /// Utility macro to construct a [Line].
@@ -245,8 +263,7 @@ macro_rules! line {
         $crate::Line {
             indent: $indent, comment: $comment,
             padding: $padding, bullet: $bullet,
-            words: vec![$($($word),*)?],
-            newline: false,
+            words: vec![$($($word),*)?], newline: false,
         }
     };
 
@@ -258,8 +275,7 @@ macro_rules! line {
         $crate::Line {
             indent: $indent, comment: $comment,
             padding: $padding, bullet: $bullet,
-            words: vec![$($($word),*)?],
-            newline: true,
+            words: vec![$($($word),*)?], newline: true,
         }
     };
 }

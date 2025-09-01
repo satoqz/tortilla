@@ -82,57 +82,57 @@ mod tests {
 
     #[test]
     fn empty() {
-        assert_eq!(lex(""), tokens!());
+        assert_eq!(lex(""), tokens![]);
     }
 
     #[test]
     fn single_space() {
-        assert_eq!(lex(" "), tokens!(s));
+        assert_eq!(lex(" "), tokens![s]);
     }
 
     #[test]
     fn single_tab() {
-        assert_eq!(lex("\t"), tokens!(t));
+        assert_eq!(lex("\t"), tokens![t]);
     }
 
     #[test]
     fn mixed_whitespace() {
-        assert_eq!(lex("\t  \t "), tokens!(t, s, s, t, s));
+        assert_eq!(lex("\t  \t "), tokens![t, s, s, t, s]);
     }
 
     #[test]
     fn single_lf() {
-        assert_eq!(lex("\n"), tokens!(lf));
+        assert_eq!(lex("\n"), tokens![lf]);
     }
 
     #[test]
     fn single_crlf() {
-        assert_eq!(lex("\r\n"), tokens!(crlf));
+        assert_eq!(lex("\r\n"), tokens![crlf]);
     }
 
     #[test]
     fn mixed_newlines() {
-        assert_eq!(lex("\r\n\n\n\r\n"), tokens!(crlf, lf, lf, crlf),);
+        assert_eq!(lex("\r\n\n\n\r\n"), tokens![crlf, lf, lf, crlf],);
     }
 
     #[test]
     fn one_letter_word() {
-        assert_eq!(lex("a"), tokens!("a"));
+        assert_eq!(lex("a"), tokens!["a"]);
     }
 
     #[test]
     fn multi_letter_word() {
-        assert_eq!(lex("foobar"), tokens!("foobar"));
+        assert_eq!(lex("foobar"), tokens!["foobar"]);
     }
 
     #[test]
     fn full_sentence() {
         assert_eq!(
             lex("Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo."),
-            tokens!(
+            tokens![
                 "Buffalo", s, "buffalo", s, "Buffalo", s, "buffalo", s, "buffalo", s, "buffalo", s,
                 "Buffalo", s, "buffalo."
-            )
+            ]
         );
     }
 
@@ -140,7 +140,7 @@ mod tests {
     fn mixed_paragraphs() {
         assert_eq!(
             lex("\t\tfoo  bar \nbaz\r\n"),
-            tokens!(t, t, "foo", s, s, "bar", s, lf, "baz", crlf)
+            tokens![t, t, "foo", s, s, "bar", s, lf, "baz", crlf]
         );
     }
 }
