@@ -41,12 +41,6 @@ impl Sauce for Guacamole {
     fn should_break(&mut self, words: &[&str], idx: usize) -> bool {
         let width = words[idx].width_cjk();
 
-        // First word always fits, and doesn't produce an extra space.
-        if self.width == 0 {
-            self.width = width;
-            return true;
-        }
-
         let (updated, should_break) = match self.width {
             // First word always fits, and doesn't produce an extra space.
             0 => (width, false),
